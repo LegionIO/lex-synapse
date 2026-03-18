@@ -13,5 +13,7 @@ group :test do
   gem 'rspec_junit_formatter'
   gem 'rubocop', '~> 1.75'
   gem 'rubocop-rspec'
+  gem 'sequel'
   gem 'simplecov'
+  gem 'sqlite3'
 end
