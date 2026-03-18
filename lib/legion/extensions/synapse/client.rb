@@ -6,6 +6,10 @@ require_relative 'runners/crystallize'
 require_relative 'runners/mutate'
 require_relative 'runners/revert'
 require_relative 'runners/report'
+require_relative 'runners/gaia_report'
+require_relative 'runners/dream'
+require_relative 'runners/promote'
+require_relative 'runners/retrieve'
 
 module Legion
   module Extensions
@@ -17,6 +21,10 @@ module Legion
         include Runners::Mutate
         include Runners::Revert
         include Runners::Report
+        include Runners::GaiaReport
+        include Runners::Dream
+        include Runners::Promote
+        include Runners::Retrieve
 
         attr_reader :conditioner_client, :transformer_client
 
