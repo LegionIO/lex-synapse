@@ -1,15 +1,6 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'sequel'
-
-DB = Sequel.sqlite
-Sequel.extension :migration
-Sequel::Migrator.run(DB, File.expand_path('../../../../../lib/legion/extensions/synapse/data/migrations', __dir__))
-
-require_relative '../../../../../lib/legion/extensions/synapse/data/models/synapse'
-require_relative '../../../../../lib/legion/extensions/synapse/data/models/synapse_mutation'
-require_relative '../../../../../lib/legion/extensions/synapse/data/models/synapse_signal'
 
 RSpec.describe 'Synapse data models' do
   describe 'migration files' do
