@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.2] - 2026-03-18
+
+### Fixed
+- Remove local path references from Gemfile (lex-conditioner, lex-transformer)
+
 ## [0.2.1] - 2026-03-18
 
 ### Changed

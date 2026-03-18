@@ -4,9 +4,6 @@ source 'https://rubygems.org'
 
 gemspec
 
-gem 'lex-conditioner', path: '../lex-conditioner'
-gem 'lex-transformer', path: '../lex-transformer'
-
 group :test do
   gem 'rake'
   gem 'rspec', '~> 3.13'
