@@ -47,3 +47,7 @@ Naming/PredicatePrefix:
 
 Gemspec/DevelopmentDependencies:
   Enabled: false
+
+Lint/EmptyClass:
+  Exclude:
+    - 'spec/**/*'
