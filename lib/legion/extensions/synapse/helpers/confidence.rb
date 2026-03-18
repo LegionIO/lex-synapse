@@ -5,6 +5,11 @@ module Legion
     module Synapse
       module Helpers
         module Confidence
+          VALID_STATUSES = %w[active observing dampened].freeze
+          EVALUABLE_STATUSES = %w[active observing].freeze
+          VALID_ORIGINS = %w[explicit emergent seeded].freeze
+          VALID_OUTCOMES = %w[success failed].freeze
+
           STARTING_SCORES = { explicit: 0.7, emergent: 0.3, seeded: 0.5 }.freeze
           ADJUSTMENTS = {
             success:            0.02,

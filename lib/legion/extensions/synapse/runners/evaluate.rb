@@ -12,7 +12,7 @@ module Legion
           def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil)
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
-            return { success: false, error: 'synapse not active' } unless %w[active observing].include?(synapse.status)
+            return { success: false, error: 'synapse not active' } unless Helpers::Confidence::EVALUABLE_STATUSES.include?(synapse.status)
 
             mode = Helpers::Confidence.autonomy_mode(synapse.confidence)
             start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)

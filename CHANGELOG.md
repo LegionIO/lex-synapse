@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-03-18
+
+### Changed
+- Extract VALID_STATUSES, EVALUABLE_STATUSES, VALID_ORIGINS, VALID_OUTCOMES constants into Confidence module
+- Replace inline status array in Evaluate#evaluate with EVALUABLE_STATUSES constant reference
+
 ## [0.2.0] - 2026-03-17
 
 ### Added

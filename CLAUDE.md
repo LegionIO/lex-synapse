@@ -91,7 +91,7 @@ bundle exec rspec
 bundle exec rubocop
 ```
 
-303 specs, 96%+ coverage. Uses in-memory SQLite for model/runner tests.
+308 specs, 96%+ coverage. Uses in-memory SQLite for model/runner tests.
 
 ---
 

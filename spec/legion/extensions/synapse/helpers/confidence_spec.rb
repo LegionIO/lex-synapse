@@ -4,6 +4,34 @@ require 'spec_helper'
 require 'legion/extensions/synapse/helpers/confidence'
 
 RSpec.describe Legion::Extensions::Synapse::Helpers::Confidence do
+  describe 'VALID_STATUSES' do
+    it 'includes active, observing, and dampened' do
+      expect(described_class::VALID_STATUSES).to contain_exactly('active', 'observing', 'dampened')
+    end
+  end
+
+  describe 'EVALUABLE_STATUSES' do
+    it 'is a subset of VALID_STATUSES' do
+      expect(described_class::EVALUABLE_STATUSES - described_class::VALID_STATUSES).to be_empty
+    end
+
+    it 'excludes dampened' do
+      expect(described_class::EVALUABLE_STATUSES).not_to include('dampened')
+    end
+  end
+
+  describe 'VALID_ORIGINS' do
+    it 'matches STARTING_SCORES keys' do
+      expect(described_class::VALID_ORIGINS.map(&:to_sym)).to contain_exactly(*described_class::STARTING_SCORES.keys)
+    end
+  end
+
+  describe 'VALID_OUTCOMES' do
+    it 'includes success and failed' do
+      expect(described_class::VALID_OUTCOMES).to contain_exactly('success', 'failed')
+    end
+  end
+
   describe '.starting_score' do
     it 'returns 0.7 for explicit origin' do
       expect(described_class.starting_score(:explicit)).to eq(0.7)
