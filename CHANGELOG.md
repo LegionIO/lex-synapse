@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.0] - 2026-03-17
+
+### Added
+- `Runners::GaiaReport` with `gaia_summary` (tick-consumable stats) and `gaia_reflection` (mutation tally + summary for post-tick)
+- `Runners::Dream` with `dream_replay` (read-only mutation timeline) and `dream_simulate` (what-if without modifying state)
+- `Runners::Promote` pushes high-confidence synapse patterns to Apollo (threshold: confidence >= 0.9, no reverts in 24h)
+- `Runners::Retrieve` seeds new synapses from Apollo knowledge entries (threshold: entry confidence >= 0.7)
+- Client includes all 4 new runner modules
+- 92 new specs (303 total), 96% coverage
+
 ## [0.1.0] - 2026-03-17
 
 ### Added
