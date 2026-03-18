@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'legion/extensions/synapse/version'
+require_relative 'synapse/client'
 
 module Legion
   module Extensions
