@@ -11,6 +11,7 @@ module Legion
           SEED_CONFIDENCE_THRESHOLD = 0.7
 
           def retrieve_and_seed(knowledge_entries:, **)
+            Data::Model.define_synapse_model
             seeded = []
 
             knowledge_entries.each do |entry|

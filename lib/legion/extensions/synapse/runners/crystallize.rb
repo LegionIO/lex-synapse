@@ -11,6 +11,7 @@ module Legion
           EMERGENCE_THRESHOLD = 20
 
           def crystallize(signal_pairs: [], threshold: EMERGENCE_THRESHOLD)
+            Data::Model.define_synapse_model
             created = []
 
             signal_pairs.each do |pair|

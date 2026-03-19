@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3] - 2026-03-19
+
+### Fixed
+- Guard synapse model definition against missing table at require time; replace eager `class Synapse < Sequel::Model(:synapses)` with lazy `define_synapse_model` module method that checks `Legion::Data` connected and `table_exists?` before defining the constant — prevents `PG::UndefinedTable` error when gem loads before migrations run
+- Apply same lazy-define guard to `SynapseMutation` and `SynapseSignal` models
+- Add explicit `set_primary_key :id` and `key:` options on associations in anonymous Sequel model classes to prevent Sequel inferring `_id` column name for unnamed classes
+- Call `define_synapse_model` (and related) at the top of each runner method and `RelationshipWrapper` class method before first model reference
+
 ## [0.2.2] - 2026-03-18
 
 ### Fixed

@@ -12,6 +12,8 @@ module Legion
           VALID_TRIGGERS = %w[hebbian pain dream gaia manual].freeze
 
           def mutate(synapse_id:, mutation_type:, changes:, trigger:)
+            Data::Model.define_synapse_model
+            Data::Model.define_synapse_mutation_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
             return { success: false, error: "invalid mutation_type: #{mutation_type}" } unless VALID_MUTATION_TYPES.include?(mutation_type)

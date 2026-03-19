@@ -10,6 +10,9 @@ module Legion
       module Runners
         module Report
           def report(synapse_id:)
+            Data::Model.define_synapse_model
+            Data::Model.define_synapse_mutation_model
+            Data::Model.define_synapse_signal_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 

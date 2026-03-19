@@ -5,8 +5,19 @@ module Legion
     module Synapse
       module Data
         module Model
-          class SynapseSignal < Sequel::Model(:synapse_signals)
-            many_to_one :synapse, class: 'Legion::Extensions::Synapse::Data::Model::Synapse'
+          def self.define_synapse_signal_model
+            return if const_defined?(:SynapseSignal, false)
+            return unless defined?(Legion::Data) && Legion::Settings.dig(:data, :connected)
+
+            db = Sequel::Model.db
+            return unless db&.table_exists?(:synapse_signals)
+
+            klass = Class.new(Sequel::Model(:synapse_signals)) do
+              many_to_one :synapse, class: 'Legion::Extensions::Synapse::Data::Model::Synapse',
+                                    key:   :synapse_id
+            end
+            klass.set_primary_key :id
+            const_set(:SynapseSignal, klass)
           end
         end
       end

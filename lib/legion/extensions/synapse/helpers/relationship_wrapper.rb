@@ -10,6 +10,7 @@ module Legion
         module RelationshipWrapper
           class << self
             def wrap(relationship)
+              Data::Model.define_synapse_model
               existing = Data::Model::Synapse.where(relationship_id: relationship[:id]).first
               return existing if existing
 
@@ -27,6 +28,7 @@ module Legion
             end
 
             def unwrap(synapse_id)
+              Data::Model.define_synapse_model
               synapse = Data::Model::Synapse[synapse_id]
               return { success: false, error: 'synapse not found' } unless synapse
               return { success: false, error: 'not a wrapped relationship' } unless synapse.relationship_id

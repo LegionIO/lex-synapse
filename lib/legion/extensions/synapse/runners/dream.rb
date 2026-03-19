@@ -10,6 +10,8 @@ module Legion
       module Runners
         module Dream
           def dream_replay(synapse_id: nil, **)
+            Data::Model.define_synapse_model
+            Data::Model.define_synapse_mutation_model
             synapses = if synapse_id
                          s = Data::Model::Synapse[synapse_id]
                          s ? [s] : []
@@ -27,6 +29,7 @@ module Legion
           end
 
           def dream_simulate(synapse_id:, mutation_type:, changes:, **)
+            Data::Model.define_synapse_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 

@@ -12,6 +12,8 @@ module Legion
           STABILITY_HOURS = 24
 
           def promote(synapse_id: nil, **)
+            Data::Model.define_synapse_model
+            Data::Model.define_synapse_mutation_model
             candidates = if synapse_id
                            s = Data::Model::Synapse[synapse_id]
                            s ? [s] : []

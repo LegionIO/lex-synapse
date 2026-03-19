@@ -12,6 +12,8 @@ module Legion
           CONSECUTIVE_FAILURE_THRESHOLD = 3
 
           def handle_pain(synapse_id:, task_id: nil)
+            Data::Model.define_synapse_model
+            Data::Model.define_synapse_signal_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 

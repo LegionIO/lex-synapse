@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../data/models/synapse'
+require_relative '../data/models/synapse_mutation'
 require_relative '../data/models/synapse_signal'
 require_relative '../helpers/confidence'
 
@@ -10,6 +11,7 @@ module Legion
       module Runners
         module GaiaReport
           def gaia_summary(**)
+            Data::Model.define_synapse_model
             synapses = Data::Model::Synapse.all
             active = synapses.select { |s| s.status == 'active' }
             dampened = synapses.select { |s| s.status == 'dampened' }
@@ -32,6 +34,7 @@ module Legion
           end
 
           def gaia_reflection(**)
+            Data::Model.define_synapse_mutation_model
             summary = gaia_summary
             recent_mutations = Data::Model::SynapseMutation
                                .where { created_at >= Time.now - 3600 }

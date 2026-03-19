@@ -44,6 +44,7 @@ module Legion
 
         def create(source_function_id:, target_function_id:, attention: nil, transform: nil,
                    routing_strategy: 'direct', origin: 'explicit', relationship_id: nil)
+          Data::Model.define_synapse_model
           Data::Model::Synapse.create(
             source_function_id: source_function_id,
             target_function_id: target_function_id,

@@ -2,6 +2,7 @@
 
 require_relative '../helpers/confidence'
 require_relative '../data/models/synapse'
+require_relative '../data/models/synapse_mutation'
 require_relative '../data/models/synapse_signal'
 
 module Legion
@@ -10,6 +11,8 @@ module Legion
       module Runners
         module Evaluate
           def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil)
+            Data::Model.define_synapse_model
+            Data::Model.define_synapse_signal_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
             return { success: false, error: 'synapse not active' } unless Helpers::Confidence::EVALUABLE_STATUSES.include?(synapse.status)
