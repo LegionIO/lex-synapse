@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require_relative '../../../../../lib/legion/extensions/synapse/runners/evaluate'
+require_relative '../../../../../lib/legion/extensions/synapse/helpers/proposals'
 
 RSpec.describe Legion::Extensions::Synapse::Runners::Evaluate do
   subject(:evaluator) { Object.new.extend(described_class) }
@@ -141,6 +142,54 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Evaluate do
         result = evaluator.evaluate(synapse_id: synapse.id)
         expect(result[:success]).to be false
         expect(result[:error]).to eq('synapse not active')
+      end
+    end
+
+    context 'in AUTONOMOUS mode with proposal hook' do
+      let(:proposal_synapse) do
+        Legion::Extensions::Synapse::Data::Model::Synapse.create(
+          routing_strategy: 'direct', confidence: 0.85, baseline_throughput: 1.0,
+          origin: 'explicit', status: 'active', version: 1
+        )
+      end
+
+      after do
+        Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(synapse_id: proposal_synapse.id).delete
+        Legion::Extensions::Synapse::Data::Model::SynapseSignal.where(synapse_id: proposal_synapse.id).delete
+        proposal_synapse.delete
+      end
+
+      it 'calls propose_reactive when synapse is autonomous' do
+        allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:reactive?).and_return(true)
+        allow(transformer_client).to receive(:transform).and_return({ success: true, result: { template: 'x' } })
+
+        result = evaluator.evaluate(
+          synapse_id: proposal_synapse.id, payload: { a: 1 },
+          transformer_client: transformer_client
+        )
+        expect(result[:success]).to be true
+        proposals = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(synapse_id: proposal_synapse.id)
+        expect(proposals.count).to be >= 1
+      end
+
+      it 'does not propose when confidence is below autonomous threshold' do
+        proposal_synapse.update(confidence: 0.5)
+        allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:reactive?).and_return(true)
+
+        evaluator.evaluate(synapse_id: proposal_synapse.id, payload: { a: 1 })
+        proposals = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(synapse_id: proposal_synapse.id)
+        expect(proposals.count).to eq(0)
+      end
+
+      it 'does not propose when proposals are disabled' do
+        allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:reactive?).and_return(false)
+
+        evaluator.evaluate(
+          synapse_id: proposal_synapse.id, payload: { a: 1 },
+          transformer_client: transformer_client
+        )
+        proposals = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(synapse_id: proposal_synapse.id)
+        expect(proposals.count).to eq(0)
       end
     end
   end

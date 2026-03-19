@@ -1,18 +1,23 @@
 # frozen_string_literal: true
 
 require_relative '../helpers/confidence'
+require_relative '../helpers/proposals'
 require_relative '../data/models/synapse'
 require_relative '../data/models/synapse_mutation'
 require_relative '../data/models/synapse_signal'
+require_relative 'propose'
 
 module Legion
   module Extensions
     module Synapse
       module Runners
         module Evaluate
+          include Propose
+
           def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil)
             Data::Model.define_synapse_model
             Data::Model.define_synapse_signal_model
+            Data::Model.define_synapse_proposal_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
             return { success: false, error: 'synapse not active' } unless Helpers::Confidence::EVALUABLE_STATUSES.include?(synapse.status)
@@ -39,6 +44,16 @@ module Legion
             event = transform_result[:success] ? :success : :failure
             new_confidence = Helpers::Confidence.adjust(synapse.confidence, event)
             synapse.update(confidence: new_confidence)
+
+            # Step 5: Generate proposals if autonomous
+            if Helpers::Confidence.can_self_modify?(new_confidence) && Helpers::Proposals.reactive?
+              signal_record = Data::Model::SynapseSignal.where(synapse_id: synapse.id).order(Sequel.desc(:id)).first
+              propose_reactive(
+                synapse: synapse, payload: payload, signal_id: signal_record&.id,
+                attention_result: attention_result, transform_result: transform_result,
+                transformer_client: transformer_client
+              )
+            end
 
             {
               success:     transform_result[:success],
