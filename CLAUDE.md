@@ -28,7 +28,11 @@ Legion::Extensions::Synapse
 │   ├── Crystallize     # unrouted traffic analysis, emergent creation
 │   ├── Mutate          # versioned self-modification with snapshots
 │   ├── Revert          # rollback to previous mutation version
-│   └── Report          # aggregate stats for GAIA consumption
+│   ├── Report          # aggregate stats for GAIA consumption
+│   ├── Dream           # replay historical signals in simulation mode; replay/simulate
+│   ├── GaiaReport      # GAIA tick hook: report confidence and health per synapse
+│   ├── Promote         # Apollo integration: promote high-confidence synapse patterns to shared knowledge
+│   └── Retrieve        # Apollo integration: retrieve relevant synapse patterns from shared knowledge
 ├── Helpers/
 │   ├── Confidence      # scoring, adjustments, autonomy ranges, decay
 │   ├── Homeostasis     # spike/drought detection, baseline tracking
@@ -75,6 +79,13 @@ Legion::Extensions::Synapse
 - **synapse_mutations**: Versioned change history with before/after JSON snapshots
 - **synapse_signals**: Per-signal outcome records (attention pass, transform success, latency, downstream outcome)
 
+## GAIA / Apollo Integration (v0.2.2)
+
+- **GaiaReport runner**: Called during the GAIA tick cycle to report per-synapse confidence and health metrics.
+- **Dream runner**: Replays historical signals in simulation mode. Used by the dream cycle to test routing hypothesis changes without affecting live state.
+- **Promote runner**: Publishes high-confidence synapse patterns to the Apollo shared knowledge store when confidence exceeds threshold.
+- **Retrieve runner**: Pulls relevant synapse patterns from Apollo to seed new synapses or adjust confidence for cold-start scenarios.
+
 ## Dependencies
 
 | Gem | Purpose |
@@ -87,8 +98,8 @@ Legion::Extensions::Synapse
 
 ```bash
 bundle install
-bundle exec rspec
-bundle exec rubocop
+bundle exec rspec     # 308 specs, 0 failures
+bundle exec rubocop   # 0 offenses
 ```
 
 308 specs, 96%+ coverage. Uses in-memory SQLite for model/runner tests.
