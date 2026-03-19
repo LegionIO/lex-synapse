@@ -155,4 +155,122 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Propose do
       end
     end
   end
+
+  describe '#propose_proactive' do
+    before do
+      allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:proactive?).and_return(true)
+      allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:settings).and_return(
+        Legion::Extensions::Synapse::Helpers::Proposals::DEFAULT_SETTINGS
+      )
+    end
+
+    context 'with degraded success rate' do
+      before do
+        synapse.update(confidence: 0.85)
+        12.times do |i|
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+            synapse_id: synapse.id, passed_attention: true,
+            transform_success: i < 6, latency_ms: 5
+          )
+        end
+      end
+
+      it 'creates a transform_mutation proposal' do
+        proposer.propose_proactive
+        proposals = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(
+          synapse_id: synapse.id, trigger: 'proactive'
+        )
+        expect(proposals.count).to be >= 1
+      end
+
+      it 'includes success rate in inputs' do
+        proposer.propose_proactive
+        proposal = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(
+          synapse_id: synapse.id, trigger: 'proactive'
+        ).first
+        inputs = Legion::JSON.load(proposal.inputs)
+        expect(inputs[:success_rate]).to be < 0.8
+      end
+    end
+
+    context 'with healthy success rate' do
+      before do
+        synapse.update(confidence: 0.85)
+        12.times do
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+            synapse_id: synapse.id, passed_attention: true, transform_success: true, latency_ms: 5
+          )
+        end
+      end
+
+      it 'creates no proposals' do
+        expect do
+          proposer.propose_proactive
+        end.not_to(change { Legion::Extensions::Synapse::Data::Model::SynapseProposal.count })
+      end
+    end
+
+    context 'with synapse below autonomous threshold' do
+      before { synapse.update(confidence: 0.5) }
+
+      it 'skips the synapse' do
+        expect do
+          proposer.propose_proactive
+        end.not_to(change { Legion::Extensions::Synapse::Data::Model::SynapseProposal.count })
+      end
+    end
+
+    context 'respects max_per_run' do
+      before do
+        allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:settings).and_return(
+          Legion::Extensions::Synapse::Helpers::Proposals::DEFAULT_SETTINGS.merge(max_per_run: 1)
+        )
+        synapse.update(confidence: 0.85, transform: '{"template":"x"}')
+        12.times do |i|
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+            synapse_id: synapse.id, passed_attention: true,
+            transform_success: i < 4, latency_ms: 5
+          )
+        end
+      end
+
+      it 'creates at most max_per_run proposals per synapse' do
+        proposer.propose_proactive
+        proposals = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(
+          synapse_id: synapse.id, trigger: 'proactive'
+        )
+        expect(proposals.count).to be <= 1
+      end
+    end
+
+    context 'deduplicates pending proposals' do
+      before do
+        synapse.update(confidence: 0.85)
+        12.times do |i|
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+            synapse_id: synapse.id, passed_attention: true,
+            transform_success: i < 4, latency_ms: 5
+          )
+        end
+      end
+
+      it 'does not create duplicate proposals within window' do
+        proposer.propose_proactive
+        initial_count = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(synapse_id: synapse.id).count
+        proposer.propose_proactive
+        expect(Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(synapse_id: synapse.id).count).to eq(initial_count)
+      end
+    end
+
+    context 'when proactive is disabled' do
+      before do
+        allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:proactive?).and_return(false)
+      end
+
+      it 'returns empty proposals' do
+        result = proposer.propose_proactive
+        expect(result[:proposals]).to eq([])
+      end
+    end
+  end
 end
