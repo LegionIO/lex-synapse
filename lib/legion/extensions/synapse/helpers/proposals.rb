@@ -10,15 +10,15 @@ module Legion
           VALID_STATUSES = %w[pending approved rejected applied expired].freeze
 
           DEFAULT_SETTINGS = {
-            enabled: true,
-            reactive: true,
-            proactive: true,
-            proactive_interval: 300,
-            max_per_run: 3,
-            llm_engine_options: { temperature: 0.3, max_tokens: 1024 },
-            success_rate_threshold: 0.8,
+            enabled:                 true,
+            reactive:                true,
+            proactive:               true,
+            proactive_interval:      300,
+            max_per_run:             3,
+            llm_engine_options:      { temperature: 0.3, max_tokens: 1024 },
+            success_rate_threshold:  0.8,
             payload_drift_threshold: 0.2,
-            dedup_window_hours: 24
+            dedup_window_hours:      24
           }.freeze
 
           class << self

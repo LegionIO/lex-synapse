@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0] - 2026-03-19
+
+### Added
+- Autonomous observation mode: proposal engine for AUTONOMOUS tier (confidence 0.8+)
+- `synapse_proposals` table with migration 004
+- `Runners::Propose` with reactive proposals (no-template, transform failure, pain correlation)
+- `Runners::Propose` with proactive analysis (success rate degradation, payload drift)
+- `Actors::Propose` periodic actor for proactive analysis (every 300s)
+- `Helpers::Proposals` settings helper with configurable thresholds
+- Proposal hook in `Runners::Evaluate` for autonomous synapses (gated by settings)
+- Client `proposals(synapse_id:, status:)` query method
+- Client `review_proposal(proposal_id:, status:)` for approving/rejecting proposals
+- LLM-backed proposal generation via lex-transformer LLM engine
+- Proposal deduplication within configurable window
+- Integration specs for full proposal workflow
+- Settings: `lex-synapse.proposals.*` for master switch, reactive/proactive toggles, max_per_run, LLM engine options, thresholds
+
+### Changed
+- `lex-transformer` dependency bumped to >= 0.3.0 (requires LLM engine with engine_options)
+
 ## [0.2.3] - 2026-03-19
 
 ### Fixed

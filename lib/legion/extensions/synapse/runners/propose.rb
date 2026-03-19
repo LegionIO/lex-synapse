@@ -22,9 +22,7 @@ module Legion
             proposals = []
 
             # Trigger 1: No transform template exists
-            if synapse.transform.nil? || synapse.transform.to_s.strip.empty?
-              proposals << propose_llm_transform(synapse, payload, signal_id, transformer_client)
-            end
+            proposals << propose_llm_transform(synapse, payload, signal_id, transformer_client) if synapse.transform.nil? || synapse.transform.to_s.strip.empty?
 
             # Trigger 2: Transform failed
             if transform_result[:success] == false && synapse.transform && !synapse.transform.to_s.strip.empty?
@@ -32,9 +30,7 @@ module Legion
             end
 
             # Trigger 3: Pain correlation — attention passed but recent downstream failures
-            if attention_result[:passed] && pain_pattern?(synapse)
-              proposals << propose_attention_adjustment(synapse, payload, signal_id, transformer_client)
-            end
+            proposals << propose_attention_adjustment(synapse, payload, signal_id, transformer_client) if attention_result[:passed] && pain_pattern?(synapse)
 
             { proposals: proposals.compact }
           end
@@ -128,7 +124,7 @@ module Legion
             signals = Data::Model::SynapseSignal.where(synapse_id: synapse.id).order(Sequel.desc(:id)).limit(100).all
             return nil if signals.size < 10
 
-            success_count = signals.count { |s| s.transform_success }
+            success_count = signals.count(&:transform_success)
             rate = success_count.to_f / signals.size
             return nil if rate >= threshold
             return nil if dedup_exists?(synapse.id, 'transform_mutation', 'proactive', settings)
@@ -194,14 +190,14 @@ module Legion
 
           def create_proposal(synapse:, signal_id:, proposal_type:, trigger:, inputs:, output:, rationale:)
             Data::Model::SynapseProposal.create(
-              synapse_id: synapse.id,
-              signal_id: signal_id,
+              synapse_id:    synapse.id,
+              signal_id:     signal_id,
               proposal_type: proposal_type,
-              trigger: trigger,
-              inputs: inputs,
-              output: output,
-              rationale: rationale,
-              status: 'pending'
+              trigger:       trigger,
+              inputs:        inputs,
+              output:        output,
+              rationale:     rationale,
+              status:        'pending'
             )
           end
 

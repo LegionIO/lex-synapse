@@ -71,9 +71,7 @@ module Legion
 
         def review_proposal(proposal_id:, status:)
           Data::Model.define_synapse_proposal_model
-          unless Helpers::Proposals::VALID_STATUSES.include?(status)
-            return { success: false, error: "invalid status: #{status}" }
-          end
+          return { success: false, error: "invalid status: #{status}" } unless Helpers::Proposals::VALID_STATUSES.include?(status)
 
           proposal = Data::Model::SynapseProposal[proposal_id]
           return { success: false, error: 'proposal not found' } unless proposal

@@ -27,5 +27,5 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'lex-conditioner', '>= 0.3.0'
-  spec.add_dependency 'lex-transformer', '>= 0.2.0'
+  spec.add_dependency 'lex-transformer', '>= 0.3.0'
 end

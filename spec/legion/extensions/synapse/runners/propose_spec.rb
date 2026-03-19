@@ -22,7 +22,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Propose do
 
   before do
     allow(transformer_client).to receive(:transform).and_return(
-      { success: true, result: { template: '{"mapped":"<%= input %>"}'} }
+      { success: true, result: { template: '{"mapped":"<%= input %>"}' } }
     )
     allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:reactive?).and_return(true)
     allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:llm_engine_options).and_return(

@@ -10,7 +10,7 @@ Cognitive routing layer that wraps task chain relationships with observation, le
 
 **GitHub**: https://github.com/LegionIO/lex-synapse
 **License**: MIT
-**Version**: 0.2.2
+**Version**: 0.3.0
 
 ## Architecture
 
@@ -21,7 +21,8 @@ Legion::Extensions::Synapse
 │   ├── Pain            # Subscription — task.failed handler
 │   ├── Crystallize     # Every 300s — emergent synapse detection
 │   ├── Homeostasis     # Every 30s — spike/drought monitoring
-│   └── Decay           # Every 3600s — idle confidence decay
+│   ├── Decay           # Every 3600s — idle confidence decay
+│   └── Propose          # Every 300s — proactive proposal analysis for AUTONOMOUS synapses
 ├── Runners/
 │   ├── Evaluate        # attention -> transform -> route -> record
 │   ├── Pain            # failure recording, confidence hit, auto-revert
@@ -32,7 +33,8 @@ Legion::Extensions::Synapse
 │   ├── Dream           # replay historical signals in simulation mode; replay/simulate
 │   ├── GaiaReport      # GAIA tick hook: report confidence and health per synapse
 │   ├── Promote         # Apollo integration: promote high-confidence synapse patterns to shared knowledge
-│   └── Retrieve        # Apollo integration: retrieve relevant synapse patterns from shared knowledge
+│   ├── Retrieve        # Apollo integration: retrieve relevant synapse patterns from shared knowledge
+│   └── Propose         # reactive (signal-driven) + proactive (periodic) proposal generation
 ├── Helpers/
 │   ├── Confidence      # scoring, adjustments, autonomy ranges, decay
 │   ├── Homeostasis     # spike/drought detection, baseline tracking
@@ -79,6 +81,16 @@ Legion::Extensions::Synapse
 - **synapse_mutations**: Versioned change history with before/after JSON snapshots
 - **synapse_signals**: Per-signal outcome records (attention pass, transform success, latency, downstream outcome)
 
+## Autonomous Observation Mode (v0.3.0)
+
+- **Proposal engine**: AUTONOMOUS tier (confidence 0.8+) generates proposals instead of executing autonomous actions
+- **Reactive proposals**: on signal evaluation — no-template inference, transform failure fix, attention pain correlation
+- **Proactive proposals**: periodic analysis — success rate degradation, payload drift detection
+- **LLM-backed**: proposals call lex-transformer LLM engine for real output generation
+- **Settings**: `lex-synapse.proposals.*` — enabled, reactive, proactive, max_per_run, llm_engine_options, thresholds
+- **Data**: `synapse_proposals` table with status lifecycle (pending -> approved/rejected/applied/expired)
+- **Client methods**: `proposals(synapse_id:, status:)`, `review_proposal(proposal_id:, status:)`
+
 ## GAIA / Apollo Integration (v0.2.2)
 
 - **GaiaReport runner**: Called during the GAIA tick cycle to report per-synapse confidence and health metrics.
@@ -91,18 +103,18 @@ Legion::Extensions::Synapse
 | Gem | Purpose |
 |-----|---------|
 | `lex-conditioner` >= 0.3.0 | Attention evaluation (condition rules) |
-| `lex-transformer` >= 0.2.0 | Payload transformation (template engines) |
+| `lex-transformer` >= 0.3.0 | Payload transformation (template engines) |
 | `legion-data` | Required — database persistence via Sequel |
 
 ## Testing
 
 ```bash
 bundle install
-bundle exec rspec     # 308 specs, 0 failures
+bundle exec rspec     # 366 specs, 0 failures
 bundle exec rubocop   # 0 offenses
 ```
 
-308 specs, 96%+ coverage. Uses in-memory SQLite for model/runner tests.
+366 specs, 95%+ coverage. Uses in-memory SQLite for model/runner tests.
 
 ---
 

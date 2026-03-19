@@ -8,7 +8,7 @@ RSpec.describe Legion::Extensions::Synapse do
     expect(Legion::Extensions::Synapse::VERSION).not_to be_nil
   end
 
-  it 'has version 0.2.3' do
-    expect(Legion::Extensions::Synapse::VERSION).to eq('0.2.3')
+  it 'has version 0.3.0' do
+    expect(Legion::Extensions::Synapse::VERSION).to eq('0.3.0')
   end
 end

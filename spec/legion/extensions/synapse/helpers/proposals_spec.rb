@@ -7,7 +7,7 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Proposals do
   describe 'constants' do
     it 'defines VALID_PROPOSAL_TYPES' do
       expect(described_class::VALID_PROPOSAL_TYPES).to include('llm_transform', 'attention_mutation',
-                                                                'transform_mutation', 'route_change')
+                                                               'transform_mutation', 'route_change')
     end
 
     it 'defines VALID_TRIGGERS' do
