@@ -170,6 +170,30 @@ RSpec.describe 'Synapse data models' do
     end
   end
 
+  describe 'synapse_proposals migration' do
+    it 'has migration 004_create_synapse_proposals.rb' do
+      migrations_dir = File.expand_path('../../../../../lib/legion/extensions/synapse/data/migrations', __dir__)
+      expect(File.exist?(File.join(migrations_dir, '004_create_synapse_proposals.rb'))).to be true
+    end
+
+    it 'migration 004 is valid Ruby' do
+      migrations_dir = File.expand_path('../../../../../lib/legion/extensions/synapse/data/migrations', __dir__)
+      path = File.join(migrations_dir, '004_create_synapse_proposals.rb')
+      expect { RubyVM::InstructionSequence.compile_file(path) }.not_to raise_error
+    end
+
+    it 'creates the synapse_proposals table' do
+      expect(DB.table_exists?(:synapse_proposals)).to be true
+    end
+
+    it 'synapse_proposals has expected columns' do
+      cols = DB.schema(:synapse_proposals).map { |c| c[0] }
+      expect(cols).to include(:id, :synapse_id, :signal_id, :proposal_type, :trigger,
+                              :inputs, :output, :rationale, :status, :estimated_confidence_impact,
+                              :created_at, :reviewed_at)
+    end
+  end
+
   describe Legion::Extensions::Synapse::Data::Model::SynapseSignal do
     let(:synapse) do
       Legion::Extensions::Synapse::Data::Model::Synapse.create(
@@ -230,6 +254,50 @@ RSpec.describe 'Synapse data models' do
       )
       expect(signal.transform_success).to be false
       signal.delete
+    end
+  end
+
+  describe Legion::Extensions::Synapse::Data::Model::SynapseProposal do
+    let(:synapse) do
+      Legion::Extensions::Synapse::Data::Model::Synapse.create(
+        routing_strategy: 'direct', confidence: 0.85, baseline_throughput: 1.0,
+        origin: 'explicit', status: 'active', version: 1, created_at: Time.now
+      )
+    end
+
+    after { synapse.delete }
+
+    it 'is defined' do
+      expect(defined?(Legion::Extensions::Synapse::Data::Model::SynapseProposal)).to eq('constant')
+    end
+
+    it 'is a Sequel::Model subclass' do
+      expect(described_class.ancestors).to include(Sequel::Model)
+    end
+
+    it 'has synapse association' do
+      expect(described_class.associations).to include(:synapse)
+    end
+
+    it 'can create and retrieve a record' do
+      proposal = described_class.create(
+        synapse_id: synapse.id, proposal_type: 'llm_transform', trigger: 'reactive',
+        inputs: '{"source_schema":{}}', output: '{"template":"hello"}',
+        rationale: 'no template exists', status: 'pending', created_at: Time.now
+      )
+      expect(proposal.id).not_to be_nil
+      expect(proposal.proposal_type).to eq('llm_transform')
+      expect(proposal.trigger).to eq('reactive')
+      proposal.delete
+    end
+
+    it 'defaults status to pending' do
+      proposal = described_class.create(
+        synapse_id: synapse.id, proposal_type: 'llm_transform', trigger: 'reactive',
+        created_at: Time.now
+      )
+      expect(proposal.status).to eq('pending')
+      proposal.delete
     end
   end
 end

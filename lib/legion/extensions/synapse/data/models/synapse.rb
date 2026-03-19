@@ -17,6 +17,8 @@ module Legion
                                       key:   :synapse_id
               one_to_many :signals,   class: 'Legion::Extensions::Synapse::Data::Model::SynapseSignal',
                                       key:   :synapse_id
+              one_to_many :proposals, class: 'Legion::Extensions::Synapse::Data::Model::SynapseProposal',
+                                      key:   :synapse_id
             end
             klass.set_primary_key :id
             const_set(:Synapse, klass)
