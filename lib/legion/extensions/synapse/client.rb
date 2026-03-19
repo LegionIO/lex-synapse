@@ -10,6 +10,9 @@ require_relative 'runners/gaia_report'
 require_relative 'runners/dream'
 require_relative 'runners/promote'
 require_relative 'runners/retrieve'
+require_relative 'runners/propose'
+require_relative 'data/models/synapse_proposal'
+require_relative 'helpers/proposals'
 
 module Legion
   module Extensions
@@ -25,6 +28,7 @@ module Legion
         include Runners::Dream
         include Runners::Promote
         include Runners::Retrieve
+        include Runners::Propose
 
         attr_reader :conditioner_client, :transformer_client
 
@@ -56,6 +60,26 @@ module Legion
             confidence:         Helpers::Confidence.starting_score(origin),
             status:             origin == 'emergent' ? 'observing' : 'active'
           )
+        end
+
+        def proposals(synapse_id:, status: nil)
+          Data::Model.define_synapse_proposal_model
+          dataset = Data::Model::SynapseProposal.where(synapse_id: synapse_id)
+          dataset = dataset.where(status: status) if status
+          dataset.order(Sequel.desc(:id)).all
+        end
+
+        def review_proposal(proposal_id:, status:)
+          Data::Model.define_synapse_proposal_model
+          unless Helpers::Proposals::VALID_STATUSES.include?(status)
+            return { success: false, error: "invalid status: #{status}" }
+          end
+
+          proposal = Data::Model::SynapseProposal[proposal_id]
+          return { success: false, error: 'proposal not found' } unless proposal
+
+          proposal.update(status: status, reviewed_at: Time.now)
+          { success: true, proposal_id: proposal_id, status: status }
         end
       end
     end

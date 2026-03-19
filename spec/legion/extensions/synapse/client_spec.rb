@@ -9,6 +9,7 @@ RSpec.describe Legion::Extensions::Synapse::Client do
   after(:each) do
     Legion::Extensions::Synapse::Data::Model::SynapseSignal.dataset.delete
     Legion::Extensions::Synapse::Data::Model::SynapseMutation.dataset.delete
+    Legion::Extensions::Synapse::Data::Model::SynapseProposal.dataset.delete
     Legion::Extensions::Synapse::Data::Model::Synapse.dataset.delete
   end
 
@@ -221,6 +222,73 @@ RSpec.describe Legion::Extensions::Synapse::Client do
       result = client.report(synapse_id: synapse.id)
       expect(result[:success]).to be true
       expect(result[:synapse_id]).to eq(synapse.id)
+    end
+  end
+
+  describe '#proposals' do
+    let!(:synapse) { client.create(source_function_id: 1, target_function_id: 2) }
+
+    before do
+      synapse.update(confidence: 0.85)
+      Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse.id, proposal_type: 'llm_transform', trigger: 'reactive',
+        status: 'pending', inputs: '{}', output: '{}', rationale: 'test'
+      )
+      Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse.id, proposal_type: 'attention_mutation', trigger: 'proactive',
+        status: 'approved', inputs: '{}', output: '{}', rationale: 'test2'
+      )
+    end
+
+    it 'returns all proposals for a synapse' do
+      result = client.proposals(synapse_id: synapse.id)
+      expect(result.size).to eq(2)
+    end
+
+    it 'filters by status' do
+      result = client.proposals(synapse_id: synapse.id, status: 'pending')
+      expect(result.size).to eq(1)
+      expect(result.first.proposal_type).to eq('llm_transform')
+    end
+
+    it 'returns empty array when no proposals match' do
+      result = client.proposals(synapse_id: synapse.id, status: 'rejected')
+      expect(result).to be_empty
+    end
+  end
+
+  describe '#review_proposal' do
+    let!(:synapse) { client.create(source_function_id: 1, target_function_id: 2) }
+    let!(:proposal) do
+      Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse.id, proposal_type: 'llm_transform', trigger: 'reactive',
+        status: 'pending', inputs: '{}', output: '{}', rationale: 'test'
+      )
+    end
+
+    it 'updates the proposal status' do
+      result = client.review_proposal(proposal_id: proposal.id, status: 'approved')
+      expect(result[:success]).to be true
+      proposal.reload
+      expect(proposal.status).to eq('approved')
+    end
+
+    it 'sets reviewed_at timestamp' do
+      client.review_proposal(proposal_id: proposal.id, status: 'rejected')
+      proposal.reload
+      expect(proposal.reviewed_at).not_to be_nil
+    end
+
+    it 'returns error for invalid status' do
+      result = client.review_proposal(proposal_id: proposal.id, status: 'invalid')
+      expect(result[:success]).to be false
+      expect(result[:error]).to include('invalid status')
+    end
+
+    it 'returns error for nonexistent proposal' do
+      result = client.review_proposal(proposal_id: 99_999, status: 'approved')
+      expect(result[:success]).to be false
+      expect(result[:error]).to eq('proposal not found')
     end
   end
 end
