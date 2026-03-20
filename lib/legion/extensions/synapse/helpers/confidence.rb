@@ -36,7 +36,9 @@ module Legion
               delta = ADJUSTMENTS.fetch(event, 0)
               result = confidence + delta
               result += ADJUSTMENTS[:consecutive_bonus] if event == :success && consecutive_successes > CONSECUTIVE_BONUS_THRESHOLD
-              clamp(result)
+              new_confidence = clamp(result)
+              Legion::Events.emit('synapse.confidence_update', delta: delta, event: event, new_confidence: new_confidence) if defined?(Legion::Events)
+              new_confidence
             end
 
             def decay(confidence, hours: 1)
