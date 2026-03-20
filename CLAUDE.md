@@ -110,11 +110,11 @@ Legion::Extensions::Synapse
 
 ```bash
 bundle install
-bundle exec rspec     # 366 specs, 0 failures
+bundle exec rspec     # 353 specs, 0 failures
 bundle exec rubocop   # 0 offenses
 ```
 
-366 specs, 95%+ coverage. Uses in-memory SQLite for model/runner tests.
+353 specs, 95%+ coverage. Uses in-memory SQLite for model/runner tests.
 
 ---
 

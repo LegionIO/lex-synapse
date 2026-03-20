@@ -146,7 +146,7 @@ Three tables: `synapses` (core routing definition + confidence + status), `synap
 ## Dependencies
 
 - `lex-conditioner` >= 0.3.0
-- `lex-transformer` >= 0.2.0
+- `lex-transformer` >= 0.3.0
 - Ruby >= 3.4
 - [LegionIO](https://github.com/LegionIO/LegionIO) framework (for AMQP actor mode)
 - Standalone Client works without the framework (requires Sequel + database)
