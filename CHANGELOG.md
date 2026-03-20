@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.1] - 2026-03-20
+
+### Added
+- Emit `synapse.confidence_update` event on confidence adjustment for safety metrics
+
 ## [0.3.0] - 2026-03-19
 
 ### Added
