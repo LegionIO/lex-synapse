@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.2] - 2026-03-21
+
+### Fixed
+- Homeostasis actor converted to self-contained pattern — was referencing non-existent `Runners::Homeostasis` and `check_homeostasis` method, now implements `action` directly using `Helpers::Homeostasis` spike/drought checks
+
 ## [0.3.1] - 2026-03-20
 
 ### Added

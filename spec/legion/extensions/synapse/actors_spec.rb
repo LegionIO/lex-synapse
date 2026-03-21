@@ -53,8 +53,16 @@ RSpec.describe 'Synapse Actors' do
   describe Legion::Extensions::Synapse::Actor::Homeostasis do
     let(:actor) { described_class.allocate }
 
-    it('has runner_function check_homeostasis') { expect(actor.runner_function).to eq('check_homeostasis') }
+    it('returns self.class as runner_class') { expect(actor.runner_class).to eq(described_class) }
     it('runs every 30 seconds') { expect(actor.time).to eq(30) }
+    it('does not use runner') { expect(actor.use_runner?).to be false }
+
+    describe '#action' do
+      it 'returns empty results when no active synapses exist' do
+        result = actor.action
+        expect(result).to include(spikes: 0, droughts: 0, updated: 0)
+      end
+    end
   end
 
   describe Legion::Extensions::Synapse::Actor::Decay do
