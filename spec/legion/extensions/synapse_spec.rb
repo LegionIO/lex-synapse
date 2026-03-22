@@ -8,7 +8,7 @@ RSpec.describe Legion::Extensions::Synapse do
     expect(Legion::Extensions::Synapse::VERSION).not_to be_nil
   end
 
-  it 'has version 0.4.1' do
-    expect(Legion::Extensions::Synapse::VERSION).to eq('0.4.1')
+  it 'has a semantic version string' do
+    expect(Legion::Extensions::Synapse::VERSION).to match(/\A\d+\.\d+\.\d+\z/)
   end
 end
