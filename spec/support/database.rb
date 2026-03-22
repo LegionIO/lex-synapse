@@ -28,8 +28,10 @@ require_relative '../../lib/legion/extensions/synapse/data/models/synapse'
 require_relative '../../lib/legion/extensions/synapse/data/models/synapse_mutation'
 require_relative '../../lib/legion/extensions/synapse/data/models/synapse_signal'
 require_relative '../../lib/legion/extensions/synapse/data/models/synapse_proposal'
+require_relative '../../lib/legion/extensions/synapse/data/models/synapse_challenge'
 
 Legion::Extensions::Synapse::Data::Model.define_synapse_model
 Legion::Extensions::Synapse::Data::Model.define_synapse_mutation_model
 Legion::Extensions::Synapse::Data::Model.define_synapse_signal_model
 Legion::Extensions::Synapse::Data::Model.define_synapse_proposal_model
+Legion::Extensions::Synapse::Data::Model.define_synapse_challenge_model
