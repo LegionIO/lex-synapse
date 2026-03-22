@@ -300,4 +300,33 @@ RSpec.describe 'Synapse data models' do
       proposal.delete
     end
   end
+
+  describe 'synapse_challenges migration' do
+    it 'has migration 005_add_synapse_challenges.rb' do
+      migrations_dir = File.expand_path('../../../../../lib/legion/extensions/synapse/data/migrations', __dir__)
+      path = File.join(migrations_dir, '005_add_synapse_challenges.rb')
+      expect(File.exist?(path)).to be true
+    end
+
+    it 'migration 005 is valid Ruby' do
+      migrations_dir = File.expand_path('../../../../../lib/legion/extensions/synapse/data/migrations', __dir__)
+      path = File.join(migrations_dir, '005_add_synapse_challenges.rb')
+      expect { RubyVM::InstructionSequence.compile_file(path) }.not_to raise_error
+    end
+
+    it 'creates the synapse_challenges table' do
+      expect(DB.table_exists?(:synapse_challenges)).to be true
+    end
+
+    it 'synapse_challenges has expected columns' do
+      cols = DB.schema(:synapse_challenges).map { |c| c[0] }
+      expect(cols).to include(:id, :proposal_id, :challenger_type, :verdict, :reasoning,
+                              :challenger_confidence, :created_at, :resolved_at, :outcome)
+    end
+
+    it 'synapse_proposals has challenge columns' do
+      cols = DB.schema(:synapse_proposals).map { |c| c[0] }
+      expect(cols).to include(:challenge_state, :challenge_score, :impact_score)
+    end
+  end
 end
