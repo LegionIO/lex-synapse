@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-03-22
+
+### Fixed
+- Challenge and Propose actors now include their runner modules and override `runner_class` to return `self.class`, fixing `NoMethodError: undefined method 'run_challenge_cycle'` at runtime
+
 ## [0.4.0] - 2026-03-22
 
 ### Added

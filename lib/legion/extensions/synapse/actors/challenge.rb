@@ -1,10 +1,16 @@
 # frozen_string_literal: true
 
+require_relative '../runners/challenge'
+
 module Legion
   module Extensions
     module Synapse
       module Actor
         class Challenge < Legion::Extensions::Actors::Every
+          include Legion::Extensions::Synapse::Runners::Challenge
+
+          def runner_class = self.class
+
           def runner_function
             'run_challenge_cycle'
           end
