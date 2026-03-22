@@ -97,9 +97,12 @@ module Legion
 
             resolved = 0
             window = settings[:outcome_observation_window] || 50
+            Data::Model.define_synapse_signal_model
             Data::Model::SynapseProposal.where(status: 'applied').each do |proposal|
-              signal_count = Data::Model::SynapseSignal.where(synapse_id: proposal.synapse_id).count
-              next unless signal_count >= window
+              cutoff = proposal.respond_to?(:reviewed_at) && proposal.reviewed_at ? proposal.reviewed_at : proposal.created_at
+              post_signals = Data::Model::SynapseSignal.where(synapse_id: proposal.synapse_id)
+                                                       .where { created_at >= cutoff }.count
+              next unless post_signals >= window
 
               unresolved = Data::Model::SynapseChallenge.where(proposal_id: proposal.id, outcome: nil)
                                                         .exclude(verdict: 'abstain')
@@ -237,7 +240,7 @@ module Legion
                                                   .order(Sequel.desc(:id)).limit(20).all
             return Helpers::Challenge.settings[:challenger_starting_confidence] if recent.empty?
 
-            recent.last.challenger_confidence
+            recent.first.challenger_confidence
           end
         end
       end
