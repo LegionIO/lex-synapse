@@ -10,7 +10,7 @@ Cognitive routing layer that wraps task chain relationships with observation, le
 
 **GitHub**: https://github.com/LegionIO/lex-synapse
 **License**: MIT
-**Version**: 0.3.2
+**Version**: 0.4.0
 
 ## Architecture
 
@@ -22,7 +22,8 @@ Legion::Extensions::Synapse
 │   ├── Crystallize     # Every 300s — emergent synapse detection
 │   ├── Homeostasis     # Every 30s — spike/drought monitoring
 │   ├── Decay           # Every 3600s — idle confidence decay
-│   └── Propose          # Every 300s — proactive proposal analysis for AUTONOMOUS synapses
+│   ├── Propose          # Every 300s — proactive proposal analysis for AUTONOMOUS synapses
+│   └── Challenge        # Every 60s — adversarial challenge pipeline for pending proposals
 ├── Runners/
 │   ├── Evaluate        # attention -> transform -> route -> record
 │   ├── Pain            # failure recording, confidence hit, auto-revert
@@ -34,14 +35,16 @@ Legion::Extensions::Synapse
 │   ├── GaiaReport      # GAIA tick hook: report confidence and health per synapse
 │   ├── Promote         # Apollo integration: promote high-confidence synapse patterns to shared knowledge
 │   ├── Retrieve        # Apollo integration: retrieve relevant synapse patterns from shared knowledge
-│   └── Propose         # reactive (signal-driven) + proactive (periodic) proposal generation
+│   ├── Propose         # reactive (signal-driven) + proactive (periodic) proposal generation
+│   └── Challenge       # conflict detection, LLM challenge, weighted aggregation, outcome resolution
 ├── Helpers/
 │   ├── Confidence      # scoring, adjustments, autonomy ranges, decay
 │   ├── Homeostasis     # spike/drought detection, baseline tracking
-│   └── RelationshipWrapper  # Layer 1 -> Layer 2 wrapping
+│   ├── RelationshipWrapper  # Layer 1 -> Layer 2 wrapping
+│   └── Challenge       # settings, constants, impact threshold helpers
 ├── Data/
-│   ├── Migrations/     # 001 synapses, 002 mutations, 003 signals
-│   └── Models/         # Synapse, SynapseMutation, SynapseSignal
+│   ├── Migrations/     # 001 synapses, 002 mutations, 003 signals, 004 proposals, 005 challenges
+│   └── Models/         # Synapse, SynapseMutation, SynapseSignal, SynapseProposal, SynapseChallenge
 ├── Transport/
 │   ├── Exchanges/Synapse
 │   ├── Queues/Evaluate, Pain
@@ -80,6 +83,8 @@ Legion::Extensions::Synapse
 - **synapses**: Core routing definition with confidence, status, version, baseline_throughput
 - **synapse_mutations**: Versioned change history with before/after JSON snapshots
 - **synapse_signals**: Per-signal outcome records (attention pass, transform success, latency, downstream outcome)
+- **synapse_proposals**: Proposed changes with status lifecycle, challenge_state, challenge_score, impact_score
+- **synapse_challenges**: Per-challenge verdicts (conflict/LLM), confidence tracking, outcome resolution
 
 ## Autonomous Observation Mode (v0.3.0)
 
@@ -90,6 +95,18 @@ Legion::Extensions::Synapse
 - **Settings**: `lex-synapse.proposals.*` — enabled, reactive, proactive, max_per_run, llm_engine_options, thresholds
 - **Data**: `synapse_proposals` table with status lifecycle (pending -> approved/rejected/applied/expired)
 - **Client methods**: `proposals(synapse_id:, status:)`, `review_proposal(proposal_id:, status:)`
+
+## Adversarial Challenge Phase (v0.4.0)
+
+- **Challenge pipeline**: pending proposals go through conflict detection (mechanical) -> impact scoring -> LLM challenge (gated) -> weighted aggregation -> auto-accept/reject/await-review
+- **Conflict detection**: queries sibling pending proposals on same synapse; conflicting types produce 'challenge' verdict
+- **LLM challenge**: gated by `impact_score >= 0.3`; calls lex-transformer LLM engine; parses SUPPORT/CHALLENGE/ABSTAIN
+- **Aggregation**: `support_weight / (support_weight + challenge_weight)`, abstains excluded; >= 0.85 auto-accepts, <= 0.15 auto-rejects
+- **Challenger confidence**: starting 0.5, correct +0.05, incorrect -0.08, decay *0.998/hr; tracks via outcome resolution after observation window (50 signals post-application)
+- **Settings**: `lex-synapse.challenge.*` — enabled, impact_threshold, auto_accept_threshold, auto_reject_threshold, llm_engine_options, outcome_observation_window, max_per_cycle
+- **Data**: `synapse_challenges` table; `synapse_proposals` gains challenge_state, challenge_score, impact_score columns
+- **Statuses**: `auto_accepted`, `auto_rejected` added to proposal lifecycle
+- **Client methods**: `challenge_proposal(proposal_id:)`, `challenges(proposal_id:)`, `challenger_stats`
 
 ## GAIA / Apollo Integration (v0.2.2)
 
@@ -110,11 +127,11 @@ Legion::Extensions::Synapse
 
 ```bash
 bundle install
-bundle exec rspec     # 353 specs, 0 failures
+bundle exec rspec     # 412 specs, 0 failures
 bundle exec rubocop   # 0 offenses
 ```
 
-353 specs, 95%+ coverage. Uses in-memory SQLite for model/runner tests.
+412 specs, 94%+ coverage. Uses in-memory SQLite for model/runner tests.
 
 ---
 
