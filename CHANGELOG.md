@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.3] - 2026-03-22
+
+### Fixed
+- Race condition in lazy model definition: concurrent threads could both pass `const_defined?` before either called `const_set`, producing "already initialized constant" warnings. Added shared mutex to all 5 `define_*_model` methods.
+
 ## [0.4.2] - 2026-03-22
 
 ### Fixed
