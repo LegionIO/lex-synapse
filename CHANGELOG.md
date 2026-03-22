@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.2] - 2026-03-22
+
+### Fixed
+- Add `include Helpers::Lex` to Crystallize, Challenge, Evaluate, Pain, and Propose runners so methods are callable at module level by framework actor auto-dispatch
+
 ## [0.4.1] - 2026-03-22
 
 ### Fixed

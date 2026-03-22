@@ -242,6 +242,8 @@ module Legion
 
             recent.first.challenger_confidence
           end
+
+          include Legion::Extensions::Helpers::Lex if defined?(Legion::Extensions::Helpers::Lex)
         end
       end
     end

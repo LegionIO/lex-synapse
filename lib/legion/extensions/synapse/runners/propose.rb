@@ -246,6 +246,8 @@ module Legion
               "There have been #{recent_failures.size} downstream failures despite attention passing. " \
               'Suggest refined attention rules as a JSON condition object. Return only JSON.'
           end
+
+          include Legion::Extensions::Helpers::Lex if defined?(Legion::Extensions::Helpers::Lex)
         end
       end
     end

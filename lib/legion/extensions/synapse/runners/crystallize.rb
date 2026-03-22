@@ -39,6 +39,8 @@ module Legion
               target_function_id: target_id
             ).any?
           end
+
+          include Legion::Extensions::Helpers::Lex if defined?(Legion::Extensions::Helpers::Lex)
         end
       end
     end

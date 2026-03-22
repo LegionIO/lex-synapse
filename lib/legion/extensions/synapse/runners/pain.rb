@@ -73,6 +73,8 @@ module Legion
             baseline_signals = [synapse.baseline_throughput * 5, 5].max
             recent > (baseline_signals * 2)
           end
+
+          include Legion::Extensions::Helpers::Lex if defined?(Legion::Extensions::Helpers::Lex)
         end
       end
     end
