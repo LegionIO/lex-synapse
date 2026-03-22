@@ -7,7 +7,7 @@ module Legion
         module Proposals
           VALID_PROPOSAL_TYPES = %w[llm_transform attention_mutation transform_mutation route_change].freeze
           VALID_TRIGGERS = %w[reactive proactive].freeze
-          VALID_STATUSES = %w[pending approved rejected applied expired].freeze
+          VALID_STATUSES = %w[pending challenging challenged approved rejected applied expired auto_accepted auto_rejected].freeze
 
           DEFAULT_SETTINGS = {
             enabled:                 true,

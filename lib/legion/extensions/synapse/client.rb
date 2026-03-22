@@ -11,6 +11,7 @@ require_relative 'runners/dream'
 require_relative 'runners/promote'
 require_relative 'runners/retrieve'
 require_relative 'runners/propose'
+require_relative 'runners/challenge'
 require_relative 'data/models/synapse_proposal'
 require_relative 'helpers/proposals'
 
@@ -29,6 +30,7 @@ module Legion
         include Runners::Promote
         include Runners::Retrieve
         include Runners::Propose
+        include Runners::Challenge
 
         attr_reader :conditioner_client, :transformer_client
 
@@ -78,6 +80,25 @@ module Legion
 
           proposal.update(status: status, reviewed_at: Time.now)
           { success: true, proposal_id: proposal_id, status: status }
+        end
+
+        def challenge_proposal(proposal_id:)
+          super(proposal_id: proposal_id, transformer_client: @transformer_client)
+        end
+
+        def challenges(proposal_id:)
+          Data::Model.define_synapse_challenge_model
+          Data::Model::SynapseChallenge.where(proposal_id: proposal_id).order(Sequel.desc(:id)).all
+        end
+
+        def challenger_stats
+          Data::Model.define_synapse_challenge_model
+          resolved = Data::Model::SynapseChallenge.exclude(outcome: nil)
+          {
+            total:   resolved.count,
+            correct: resolved.where(outcome: 'correct').count,
+            by_type: resolved.group_and_count(:challenger_type).to_h { |r| [r[:challenger_type], r[:count]] }
+          }
         end
       end
     end
