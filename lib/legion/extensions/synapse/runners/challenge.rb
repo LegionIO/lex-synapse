@@ -40,9 +40,7 @@ module Legion
 
             conflict_check(proposal)
 
-            if Helpers::Challenge.above_impact_threshold?(impact) && transformer_client
-              llm_challenge(proposal, synapse, transformer_client)
-            end
+            llm_challenge(proposal, synapse, transformer_client) if Helpers::Challenge.above_impact_threshold?(impact) && transformer_client
 
             aggregate_challenges(proposal)
           end
@@ -118,9 +116,9 @@ module Legion
 
           def conflict_check(proposal)
             conflicts = Data::Model::SynapseProposal.where(
-              synapse_id: proposal.synapse_id,
+              synapse_id:    proposal.synapse_id,
               proposal_type: proposal.proposal_type,
-              status: 'pending'
+              status:        'pending'
             ).exclude(id: proposal.id)
 
             if conflicts.any?
@@ -212,7 +210,7 @@ module Legion
               "Proposed output: #{proposal.output}\n\n" \
               "Is this change sound? Respond in exactly this format:\n" \
               "VERDICT: SUPPORT or CHALLENGE or ABSTAIN\n" \
-              "REASONING: one sentence explanation"
+              'REASONING: one sentence explanation'
           end
 
           def parse_llm_verdict(response)

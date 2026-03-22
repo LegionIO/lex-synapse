@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] - 2026-03-22
+
+### Added
+- Adversarial challenge phase for proposals: conflict detection, LLM challenge, weighted aggregation
+- `synapse_challenges` table (migration 005) for per-challenge verdict tracking
+- `Runners::Challenge` with challenge_proposal, resolve_challenge_outcomes, run_challenge_cycle
+- `Helpers::Challenge` with settings, constants, impact threshold helpers
+- `Actors::Challenge` polling every 60s for pending proposals
+- Challenger confidence tracking with outcome-based learning loop
+- Auto-accept/auto-reject thresholds for unanimous verdicts
+- Client methods: challenge_proposal, challenges, challenger_stats
+- New proposal statuses: auto_accepted, auto_rejected
+- Impact scoring gates LLM challenge (expensive calls only for high-impact proposals)
+
 ## [0.3.2] - 2026-03-21
 
 ### Fixed

@@ -107,7 +107,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
     end
 
     it 'returns error for nonexistent proposal' do
-      result = runner.challenge_proposal(proposal_id: 99999)
+      result = runner.challenge_proposal(proposal_id: 99_999)
       expect(result[:success]).to be false
       expect(result[:error]).to match(/not found/)
     end
