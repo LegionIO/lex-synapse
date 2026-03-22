@@ -3,7 +3,8 @@
 ## [0.4.1] - 2026-03-22
 
 ### Fixed
-- Challenge and Propose actors now include their runner modules and override `runner_class` to return `self.class`, fixing `NoMethodError: undefined method 'run_challenge_cycle'` at runtime
+- Challenge, Propose, and Crystallize actors now include their runner modules and override `runner_class` to return `self.class`, fixing `NoMethodError` at runtime
+- Decay actor converted to self-contained pattern (like Homeostasis) — no `Runners::Decay` module existed
 
 ## [0.4.0] - 2026-03-22
 

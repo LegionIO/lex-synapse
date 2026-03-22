@@ -1,10 +1,16 @@
 # frozen_string_literal: true
 
+require_relative '../runners/crystallize'
+
 module Legion
   module Extensions
     module Synapse
       module Actor
         class Crystallize < Legion::Extensions::Actors::Every
+          include Legion::Extensions::Synapse::Runners::Crystallize
+
+          def runner_class = self.class
+
           def runner_function
             'crystallize'
           end

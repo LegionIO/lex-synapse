@@ -69,8 +69,9 @@ RSpec.describe 'Synapse Actors' do
   describe Legion::Extensions::Synapse::Actor::Decay do
     let(:actor) { described_class.allocate }
 
-    it('has runner_function apply_decay') { expect(actor.runner_function).to eq('apply_decay') }
+    it('returns self.class as runner_class') { expect(actor.runner_class).to eq(described_class) }
     it('runs every 3600 seconds') { expect(actor.time).to eq(3600) }
+    it('responds to action') { expect(actor).to respond_to(:action) }
   end
 
   describe Legion::Extensions::Synapse::Actor::Propose do
