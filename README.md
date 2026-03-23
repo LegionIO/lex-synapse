@@ -58,7 +58,7 @@ report[:success_rate] # => 1.0
 ```
 Layer 1 (Bones)  — Explicit relationships defined by users (lex-tasker)
 Layer 2 (Nerves) — Synapses wrapping relationships with learning (lex-synapse)
-Layer 3 (Mind)   — GAIA cognitive coordination + Apollo shared knowledge (future)
+Layer 3 (Mind)   — GAIA cognitive coordination + Apollo shared knowledge
 ```
 
 ### Confidence Scoring
@@ -123,6 +123,21 @@ Rolls back to a previous mutation version, restoring the before_state.
 
 Aggregates stats: confidence, status, 24h signal count, success rate, last mutation.
 
+### Dream
+`dream(synapse_id:, limit:)`
+
+Replays historical signals in simulation mode without affecting live state. Used by the dream cycle to test routing hypothesis changes.
+
+### Propose
+`propose(synapse_id:, ...)` / `proposals(synapse_id:, status:)` / `review_proposal(proposal_id:, status:)`
+
+Generates proposed changes (reactive on signal evaluation, proactive on periodic analysis) for AUTONOMOUS-tier synapses. Proposals enter a status lifecycle: pending -> approved/rejected/applied/expired/auto_accepted/auto_rejected.
+
+### Challenge
+`challenge_proposal(proposal_id:)` / `challenges(proposal_id:)` / `challenger_stats`
+
+Runs the adversarial challenge pipeline on pending proposals: conflict detection -> impact scoring -> LLM challenge (gated by impact score) -> weighted aggregation -> auto-accept/reject/await-review outcome.
+
 ## Relationship Wrapper
 
 Wrap existing Layer 1 relationships as synapses (opt-in, zero breaking changes):
@@ -139,9 +154,17 @@ synapse = Legion::Extensions::Synapse::Helpers::RelationshipWrapper.wrap(relatio
 - **Queues**: `synapse.evaluate`, `synapse.pain`
 - **Routing keys**: `synapse.evaluate`, `task.failed`
 
+## Autonomous Observation Mode
+
+AUTONOMOUS-tier synapses (confidence >= 0.8) generate proposals instead of directly executing changes. Proposals are reactive (triggered on signal evaluation) or proactive (generated periodically). The `lex-synapse.proposals.*` settings control enabled state, LLM engine options, and thresholds.
+
+## Adversarial Challenge Phase
+
+Pending proposals are subjected to a multi-stage challenge pipeline: conflict detection among sibling proposals, impact scoring, optional LLM challenge (for high-impact proposals), weighted aggregation across verdicts, and auto-accept/reject based on configurable thresholds. The `lex-synapse.challenge.*` settings control gating.
+
 ## Data Model
 
-Three tables: `synapses` (core routing definition + confidence + status), `synapse_mutations` (versioned change history), `synapse_signals` (per-signal outcome records).
+Five tables: `synapses` (core routing definition + confidence + status), `synapse_mutations` (versioned change history), `synapse_signals` (per-signal outcome records), `synapse_proposals` (proposal lifecycle), `synapse_challenges` (per-challenge verdicts).
 
 ## Dependencies
 
