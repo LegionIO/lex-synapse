@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.4] - 2026-03-22
+
+### Changed
+- Add sub-gem runtime dependencies: legion-cache, legion-crypt, legion-data, legion-json, legion-logging, legion-settings, legion-transport
+- Replace hand-rolled stubs in spec_helper with real sub-gem requires (legion/logging, legion/json, legion/settings)
+- Add Helpers::Lex and actor base class stubs to spec_helper for consistent test setup
+- Fix Legion::JSON.dump calls in runners/promote.rb and specs to wrap kwargs in explicit hash (single positional arg)
+- Force Legion::Settings.dig override in support/database.rb so lazy model definitions run against in-memory DB
+
 ## [0.4.3] - 2026-03-22
 
 ### Fixed

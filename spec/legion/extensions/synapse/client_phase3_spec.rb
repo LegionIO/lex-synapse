@@ -140,11 +140,11 @@ RSpec.describe Legion::Extensions::Synapse::Client do
       entry = {
         confidence:   0.8,
         content_type: 'synapse_pattern',
-        content:      Legion::JSON.dump(
-          source_function_id: 50,
-          target_function_id: 60,
-          routing_strategy:   'direct'
-        )
+        content:      Legion::JSON.dump({
+                                          source_function_id: 50,
+                                          target_function_id: 60,
+                                          routing_strategy:   'direct'
+                                        })
       }
       result = client.retrieve_and_seed(knowledge_entries: [entry])
       expect(result[:count]).to eq(1)

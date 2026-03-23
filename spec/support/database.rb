@@ -8,19 +8,18 @@ Sequel::Migrator.run(DB, File.expand_path('../../lib/legion/extensions/synapse/d
 
 Sequel::Model.db = DB
 
-unless defined?(Legion::Settings)
-  module Legion
-    module Settings
-      def self.dig(*_keys)
-        true
-      end
-    end
-  end
-end
-
 unless defined?(Legion::Data)
   module Legion
     module Data; end
+  end
+end
+
+# Force data connected so lazy model definitions run against the in-memory DB
+module Legion
+  module Settings
+    def self.dig(*_keys)
+      true
+    end
   end
 end
 

@@ -59,16 +59,16 @@ module Legion
           def build_knowledge_entry(synapse)
             {
               content_type: 'synapse_pattern',
-              content:      Legion::JSON.dump(
-                source_function_id: synapse.source_function_id,
-                target_function_id: synapse.target_function_id,
-                attention:          synapse.attention,
-                transform:          synapse.transform,
-                routing_strategy:   synapse.routing_strategy,
-                confidence:         synapse.confidence,
-                origin:             synapse.origin,
-                version:            synapse.version
-              ),
+              content:      Legion::JSON.dump({
+                                                source_function_id: synapse.source_function_id,
+                                                target_function_id: synapse.target_function_id,
+                                                attention:          synapse.attention,
+                                                transform:          synapse.transform,
+                                                routing_strategy:   synapse.routing_strategy,
+                                                confidence:         synapse.confidence,
+                                                origin:             synapse.origin,
+                                                version:            synapse.version
+                                              }),
               tags:         ['synapse', "origin:#{synapse.origin}", "route:#{synapse.routing_strategy}"],
               source_agent: 'lex-synapse',
               synapse_id:   synapse.id

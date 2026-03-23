@@ -10,16 +10,16 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Retrieve do
     {
       confidence:   confidence,
       content_type: content_type,
-      content:      Legion::JSON.dump(
-        source_function_id: source,
-        target_function_id: target,
-        attention:          nil,
-        transform:          nil,
-        routing_strategy:   'direct',
-        confidence:         confidence,
-        origin:             'explicit',
-        version:            1
-      )
+      content:      Legion::JSON.dump({
+                                        source_function_id: source,
+                                        target_function_id: target,
+                                        attention:          nil,
+                                        transform:          nil,
+                                        routing_strategy:   'direct',
+                                        confidence:         confidence,
+                                        origin:             'explicit',
+                                        version:            1
+                                      })
     }
   end
 
