@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.5] - 2026-03-25
+
+### Added
+- Migration 006: add slow query indexes (`idx_synapses_status_throughput`, `idx_proposals_status_challenge`)
+
 ## [0.4.4] - 2026-03-22
 
 ### Changed
