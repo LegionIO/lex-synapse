@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.6] - 2026-03-26
+
+### Changed
+- set remote_invocable? false for local dispatch
+
 ## [0.4.5] - 2026-03-25
 
 ### Added
