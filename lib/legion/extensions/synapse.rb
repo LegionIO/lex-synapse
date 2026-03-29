@@ -8,6 +8,10 @@ module Legion
     module Synapse
       extend Legion::Extensions::Core if Legion::Extensions.const_defined? :Core
 
+      def self.remote_invocable?
+        false
+      end
+
       def self.data_required?
         true
       end
