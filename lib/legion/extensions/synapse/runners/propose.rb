@@ -210,7 +210,7 @@ module Legion
             )
             { output: result[:success] ? Legion::JSON.dump(result[:result]) : nil }
           rescue StandardError => e
-            Legion::Logging.warn("Proposal LLM call failed: #{e.message}")
+            log.warn("Proposal LLM call failed: #{e.message}")
             { output: nil }
           end
 

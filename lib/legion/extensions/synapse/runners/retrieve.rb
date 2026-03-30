@@ -45,7 +45,7 @@ module Legion
             return nil unless content
 
             content.is_a?(String) ? Legion::JSON.load(content) : content
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
 

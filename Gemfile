@@ -9,6 +9,7 @@ group :test do
   gem 'rspec', '~> 3.13'
   gem 'rspec_junit_formatter'
   gem 'rubocop', '~> 1.75'
+  gem 'rubocop-legion', '~> 0.1'
   gem 'rubocop-rspec'
   gem 'sequel'
   gem 'simplecov'
