@@ -157,7 +157,7 @@ module Legion
               challenger_confidence: llm_confidence
             )
           rescue StandardError => e
-            Legion::Logging.warn("Challenge LLM call failed: #{e.message}") if defined?(Legion::Logging)
+            log.warn("Challenge LLM call failed: #{e.message}")
             Data::Model::SynapseChallenge.create(
               proposal_id: proposal.id, challenger_type: 'llm',
               verdict: 'abstain', reasoning: "LLM error: #{e.message}",

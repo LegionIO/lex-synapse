@@ -1,53 +1,27 @@
-AllCops:
-  TargetRubyVersion: 3.4
-  NewCops: enable
-  SuggestExtensions: false
+inherit_gem:
+  rubocop-legion: config/lex.yml
 
-Layout/LineLength:
-  Max: 160
-Layout/SpaceAroundEqualsInParameterDefault:
-  EnforcedStyle: space
-Layout/HashAlignment:
-  EnforcedHashRocketStyle: table
-  EnforcedColonStyle: table
-
-Metrics/MethodLength:
-  Max: 50
-Metrics/ClassLength:
-  Max: 1500
-Metrics/ModuleLength:
-  Max: 1500
-Metrics/BlockLength:
-  Max: 40
-  Exclude:
-    - 'spec/**/*'
-Metrics/AbcSize:
-  Max: 60
-Metrics/CyclomaticComplexity:
-  Max: 15
-Metrics/PerceivedComplexity:
-  Max: 17
-Metrics/ParameterLists:
+# Actors define `def time` as instance method — cop looks for DSL call, false positive
+Legion/Extension/EveryActorRequiresTime:
   Enabled: false
 
-Style/Documentation:
-  Enabled: false
-Style/SymbolArray:
-  Enabled: true
-Style/FrozenStringLiteralComment:
-  Enabled: true
-  EnforcedStyle: always
-
-Naming/FileName:
-  Enabled: false
-Naming/PredicateMethod:
-  Enabled: false
-Naming/PredicatePrefix:
+# Runner modules in this repo are designed for `include` into actors/client, not standalone
+Legion/Extension/RunnerIncludeHelpers:
   Enabled: false
 
-Gemspec/DevelopmentDependencies:
+# Private helper methods return non-Hash values by design; only public runner methods require Hash
+Legion/Extension/RunnerReturnHash:
   Enabled: false
 
+# migrations/ directory exists under data/; cop is checking the wrong path
+Legion/Extension/DataRequiredWithoutMigrations:
+  Enabled: false
+
+# Runner modules use Legion::JSON directly; helper mixin not included in standalone modules
+Legion/HelperMigration/DirectJson:
+  Enabled: false
+
+# Spec helper defines empty stub classes for actor testing
 Lint/EmptyClass:
   Exclude:
     - 'spec/**/*'
