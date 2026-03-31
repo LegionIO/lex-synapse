@@ -9,6 +9,7 @@ require 'legion/extensions/synapse/actors/homeostasis'
 require 'legion/extensions/synapse/actors/decay'
 require 'legion/extensions/synapse/actors/propose'
 require 'legion/extensions/synapse/actors/challenge'
+require 'legion/extensions/synapse/actors/blast_radius'
 
 RSpec.describe 'Synapse Actors' do
   describe Legion::Extensions::Synapse::Actor::Evaluate do
@@ -69,5 +70,16 @@ RSpec.describe 'Synapse Actors' do
     it('has runner_function run_challenge_cycle') { expect(actor.runner_function).to eq('run_challenge_cycle') }
     it('runs every 60 seconds') { expect(actor.time).to eq(60) }
     it('does not use runner') { expect(actor.use_runner?).to be false }
+  end
+
+  describe Legion::Extensions::Synapse::Actor::BlastRadius do
+    let(:actor) { described_class.allocate }
+
+    it('has runner_function compute') { expect(actor.runner_function).to eq('compute') }
+    it('runs every 1800 seconds') { expect(actor.time).to eq(1800) }
+    it('does not use runner') { expect(actor.use_runner?).to be false }
+    it('does not check subtask') { expect(actor.check_subtask?).to be false }
+    it('does not generate task') { expect(actor.generate_task?).to be false }
+    it('returns self.class as runner_class') { expect(actor.runner_class).to eq(described_class) }
   end
 end

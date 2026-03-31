@@ -6,12 +6,15 @@ require_relative '../data/models/synapse'
 require_relative '../data/models/synapse_proposal'
 require_relative '../data/models/synapse_challenge'
 require_relative '../data/models/synapse_signal'
+require_relative 'blast_radius'
 
 module Legion
   module Extensions
     module Synapse
       module Runners
         module Challenge
+          include BlastRadius
+
           def pending_challenges
             Data::Model.define_synapse_proposal_model
             Data::Model::SynapseProposal.where(status: 'pending', challenge_state: nil)
@@ -36,11 +39,14 @@ module Legion
             proposal.update(challenge_state: 'challenging')
 
             impact = calculate_impact_score(proposal, synapse)
-            proposal.update(impact_score: impact)
+            confidence_impact = estimate_confidence_impact(proposal, synapse)
+            proposal.update(impact_score: impact, estimated_confidence_impact: confidence_impact)
 
             conflict_check(proposal)
 
-            llm_challenge(proposal, synapse, transformer_client) if Helpers::Challenge.above_impact_threshold?(impact) && transformer_client
+            needs_llm = Helpers::Challenge.above_impact_threshold?(impact) ||
+                        requires_llm_review?(synapse.blast_radius.to_s)
+            llm_challenge(proposal, synapse, transformer_client) if needs_llm && transformer_client
 
             aggregate_challenges(proposal)
           end
@@ -201,7 +207,14 @@ module Legion
             baseline = [synapse.respond_to?(:baseline_throughput) && synapse.baseline_throughput ? synapse.baseline_throughput : 1.0, 1.0].max
             throughput_factor = [recent_signals.to_f / baseline, 2.0].min
 
-            (base * synapse.confidence * throughput_factor).clamp(0.0, 1.0)
+            multiplier = blast_multiplier_for(synapse.blast_radius.to_s)
+            (base * synapse.confidence * throughput_factor * multiplier).clamp(0.0, 1.0)
+          end
+
+          def estimate_confidence_impact(proposal, synapse)
+            base = Helpers::Challenge::IMPACT_WEIGHTS.fetch(proposal.proposal_type, 0.5)
+            multiplier = blast_multiplier_for(synapse.blast_radius.to_s)
+            (base * multiplier * 0.1).clamp(0.0, 1.0)
           end
 
           def build_challenge_prompt(proposal, synapse)

@@ -3,7 +3,7 @@
 module Legion
   module Extensions
     module Synapse
-      VERSION = '0.4.7'
+      VERSION = '0.4.8'
     end
   end
 end

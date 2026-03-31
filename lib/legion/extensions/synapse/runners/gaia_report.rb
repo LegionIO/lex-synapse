@@ -29,7 +29,8 @@ module Legion
               elevated_pain_count: elevated_pain.size,
               avg_confidence:      avg_confidence(active),
               emergent_candidates: observing.size,
-              health_score:        compute_health_score(active, dampened, elevated_pain)
+              health_score:        compute_health_score(active, dampened, elevated_pain),
+              blast_distribution:  blast_distribution(synapses)
             }
           end
 
@@ -63,6 +64,23 @@ module Legion
             total = active.size + dampened.size
             healthy = active.size - elevated_pain.size
             (healthy.to_f / total).round(4).clamp(0.0, 1.0)
+          end
+
+          def blast_distribution(synapses)
+            tiers = %w[LOW MED HIGH CRITICAL]
+            dist = tiers.to_h { |t| [t, 0] }
+            dist['unknown'] = 0
+
+            synapses.each do |s|
+              tier = s.respond_to?(:blast_radius) && s.blast_radius ? s.blast_radius.upcase : 'unknown'
+              if dist.key?(tier)
+                dist[tier] += 1
+              else
+                dist['unknown'] += 1
+              end
+            end
+
+            dist
           end
         end
       end
