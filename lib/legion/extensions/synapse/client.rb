@@ -11,6 +11,7 @@ require_relative 'runners/dream'
 require_relative 'runners/promote'
 require_relative 'runners/retrieve'
 require_relative 'runners/propose'
+require_relative 'runners/blast_radius'
 require_relative 'runners/challenge'
 require_relative 'data/models/synapse_proposal'
 require_relative 'helpers/proposals'
@@ -30,6 +31,7 @@ module Legion
         include Runners::Promote
         include Runners::Retrieve
         include Runners::Propose
+        include Runners::BlastRadius
         include Runners::Challenge
 
         attr_reader :conditioner_client, :transformer_client

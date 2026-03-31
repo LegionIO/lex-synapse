@@ -211,4 +211,109 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
       expect(result[:skipped]).to be true
     end
   end
+
+  describe 'blast radius multiplier on impact score' do
+    it 'applies LOW multiplier (1.0) when blast_radius is LOW' do
+      synapse.update(blast_radius: 'LOW', confidence: 0.5, baseline_throughput: 1.0)
+      runner.challenge_proposal(proposal_id: proposal.id)
+      proposal.refresh
+      expect(proposal.impact_score).not_to be_nil
+    end
+
+    it 'applies CRITICAL multiplier (3.0) raising estimated_confidence_impact higher than LOW' do
+      synapse_low = Legion::Extensions::Synapse::Data::Model::Synapse.create(
+        routing_strategy: 'direct', confidence: 0.5, status: 'active',
+        origin: 'explicit', version: 1, baseline_throughput: 1.0, blast_radius: 'LOW'
+      )
+      synapse_critical = Legion::Extensions::Synapse::Data::Model::Synapse.create(
+        routing_strategy: 'direct', confidence: 0.5, status: 'active',
+        origin: 'explicit', version: 1, baseline_throughput: 1.0, blast_radius: 'CRITICAL'
+      )
+
+      proposal_low = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse_low.id, proposal_type: 'transform_mutation',
+        trigger: 'proactive', status: 'pending'
+      )
+      proposal_critical = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse_critical.id, proposal_type: 'transform_mutation',
+        trigger: 'proactive', status: 'pending'
+      )
+
+      runner.challenge_proposal(proposal_id: proposal_low.id)
+      runner.challenge_proposal(proposal_id: proposal_critical.id)
+
+      proposal_low.refresh
+      proposal_critical.refresh
+
+      # estimated_confidence_impact = base * multiplier * 0.1, not dependent on signals
+      expect(proposal_critical.estimated_confidence_impact).to be > proposal_low.estimated_confidence_impact
+    end
+  end
+
+  describe 'estimated_confidence_impact population' do
+    it 'populates estimated_confidence_impact on proposal' do
+      runner.challenge_proposal(proposal_id: proposal.id)
+      proposal.refresh
+      expect(proposal.estimated_confidence_impact).not_to be_nil
+      expect(proposal.estimated_confidence_impact).to be_between(0.0, 1.0)
+    end
+
+    it 'scales estimated_confidence_impact with blast radius' do
+      synapse.update(blast_radius: 'CRITICAL')
+      proposal2 = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse.id, proposal_type: 'transform_mutation',
+        trigger: 'proactive', status: 'pending'
+      )
+
+      synapse_low = Legion::Extensions::Synapse::Data::Model::Synapse.create(
+        routing_strategy: 'direct', confidence: 0.5, status: 'active',
+        origin: 'explicit', version: 1, baseline_throughput: 1.0, blast_radius: 'LOW'
+      )
+      proposal_low = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: synapse_low.id, proposal_type: 'transform_mutation',
+        trigger: 'proactive', status: 'pending'
+      )
+
+      runner.challenge_proposal(proposal_id: proposal2.id)
+      runner.challenge_proposal(proposal_id: proposal_low.id)
+
+      proposal2.refresh
+      proposal_low.refresh
+
+      expect(proposal2.estimated_confidence_impact).to be > proposal_low.estimated_confidence_impact
+    end
+  end
+
+  describe 'CRITICAL synapse requires LLM review' do
+    it 'triggers LLM challenge for CRITICAL synapse even when below impact threshold' do
+      # Low confidence/signals means impact < 0.3, but CRITICAL tier forces LLM review
+      synapse.update(confidence: 0.1, baseline_throughput: 1000.0, blast_radius: 'CRITICAL')
+      transformer = double('transformer_client')
+      allow(transformer).to receive(:transform).and_return(
+        { success: true, result: 'VERDICT: SUPPORT\nREASONING: sound change' }
+      )
+
+      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)
+
+      llm_challenges = Legion::Extensions::Synapse::Data::Model::SynapseChallenge.where(
+        proposal_id: proposal.id, challenger_type: 'llm'
+      )
+      expect(llm_challenges.count).to eq(1)
+    end
+
+    it 'triggers LLM challenge for HIGH synapse even when below impact threshold' do
+      synapse.update(confidence: 0.1, baseline_throughput: 1000.0, blast_radius: 'HIGH')
+      transformer = double('transformer_client')
+      allow(transformer).to receive(:transform).and_return(
+        { success: true, result: 'VERDICT: SUPPORT\nREASONING: sound change' }
+      )
+
+      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)
+
+      llm_challenges = Legion::Extensions::Synapse::Data::Model::SynapseChallenge.where(
+        proposal_id: proposal.id, challenger_type: 'llm'
+      )
+      expect(llm_challenges.count).to eq(1)
+    end
+  end
 end

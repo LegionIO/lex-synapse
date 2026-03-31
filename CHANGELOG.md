@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.8] - 2026-03-31
+
+### Added
+- Migration 007: add blast radius columns to synapses (`blast_radius`, `propagation_depth`, `downstream_count`, `blast_radius_updated_at`)
+- `Runners::BlastRadius`: BFS graph traversal computing propagation depth and downstream count per synapse; tier classification (LOW/MED/HIGH/CRITICAL) based on depth, downstream count, and throughput
+- `Actor::BlastRadius`: periodic interval actor (every 30 minutes) calling `Runners::BlastRadius#compute`
+- Blast radius multiplier wired into `Challenge#calculate_impact_score` (1.0x LOW, 1.5x MED, 2.0x HIGH, 3.0x CRITICAL)
+- HIGH and CRITICAL synapses require LLM challenge review regardless of impact threshold
+- `estimated_confidence_impact` on proposals now populated during challenge phase
+- `GaiaReport#gaia_summary` includes `blast_distribution` breakdown (LOW/MED/HIGH/CRITICAL/unknown counts)
+
 ## [0.4.7] - 2026-03-30
 
 ### Changed

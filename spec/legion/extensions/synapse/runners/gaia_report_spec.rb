@@ -131,6 +131,35 @@ RSpec.describe Legion::Extensions::Synapse::Runners::GaiaReport do
     end
   end
 
+  describe '#gaia_summary blast_distribution' do
+    context 'with no synapses' do
+      it 'returns blast_distribution with all zeros' do
+        result = reporter.gaia_summary
+        expect(result[:blast_distribution]).to eq('LOW' => 0, 'MED' => 0, 'HIGH' => 0, 'CRITICAL' => 0, 'unknown' => 0)
+      end
+    end
+
+    context 'with synapses of various blast_radius tiers' do
+      before do
+        make_synapse(status: 'active', confidence: 0.8).tap { |s| s.update(blast_radius: 'LOW') }
+        make_synapse(status: 'active', confidence: 0.7).tap { |s| s.update(blast_radius: 'MED') }
+        make_synapse(status: 'active', confidence: 0.6).tap { |s| s.update(blast_radius: 'HIGH') }
+        make_synapse(status: 'active', confidence: 0.5).tap { |s| s.update(blast_radius: 'CRITICAL') }
+        make_synapse(status: 'active', confidence: 0.4)
+      end
+
+      it 'counts each tier correctly' do
+        result = reporter.gaia_summary
+        dist = result[:blast_distribution]
+        expect(dist['LOW']).to eq(1)
+        expect(dist['MED']).to eq(1)
+        expect(dist['HIGH']).to eq(1)
+        expect(dist['CRITICAL']).to eq(1)
+        expect(dist['unknown']).to eq(1)
+      end
+    end
+  end
+
   describe '#gaia_reflection' do
     let(:synapse) { make_synapse }
 
