@@ -23,7 +23,7 @@ module Legion
             return { success: false, error: 'synapse not active' } unless Helpers::Confidence::EVALUABLE_STATUSES.include?(synapse.status)
 
             mode = Helpers::Confidence.autonomy_mode(synapse.confidence)
-            start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
+            start_time = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC, :millisecond)
 
             # Step 1: Attention check
             attention_result = check_attention(synapse, payload, mode, conditioner_client)
@@ -35,7 +35,7 @@ module Legion
                                  { success: attention_result[:passed], result: payload }
                                end
 
-            elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - start_time
+            elapsed = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC, :millisecond) - start_time
 
             # Step 3: Record signal
             record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)

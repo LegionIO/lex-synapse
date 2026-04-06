@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.9] - 2026-04-06
+
+### Fixed
+- fix Process namespace collision by using ::Process prefix for CLOCK_MONOTONIC
+
 ## [0.4.8] - 2026-03-31
 
 ### Added
