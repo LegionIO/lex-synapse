@@ -12,6 +12,14 @@ module Legion
         false
       end
 
+      def self.mcp_tools?
+        false
+      end
+
+      def self.mcp_tools_deferred?
+        false
+      end
+
       def self.data_required?
         true
       end

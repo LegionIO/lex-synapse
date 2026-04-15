@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.10] - 2026-04-15
+### Changed
+- Set `mcp_tools?` and `mcp_tools_deferred?` to `false` — internal infrastructure extension, not an LLM-callable tool
+
 ## [0.4.9] - 2026-04-06
 
 ### Fixed
