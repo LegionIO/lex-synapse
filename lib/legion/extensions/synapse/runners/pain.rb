@@ -38,7 +38,8 @@ module Legion
             # Auto-revert on 3+ consecutive failures
             if consecutive >= CONSECUTIVE_FAILURE_THRESHOLD
               result[:action] = :auto_revert
-              result[:reverted] = true
+              revert_result = revert(synapse_id: synapse_id, trigger: 'pain')
+              result[:reverted] = revert_result[:success] == true
             end
 
             # Check if confidence dropped below autonomy threshold

@@ -11,6 +11,8 @@ module Legion
     module Synapse
       module Runners
         module Propose
+          include Legion::Logging::Helper if defined?(Legion::Logging::Helper)
+
           PAIN_CORRELATION_THRESHOLD = 3
 
           def propose_reactive(synapse:, payload:, signal_id:, attention_result:, transform_result:,
@@ -165,6 +167,8 @@ module Legion
             signals = Data::Model::SynapseSignal.where(synapse_id: synapse.id).order(Sequel.desc(:id)).limit(50).all
             return nil if signals.size < 10
 
+            # TODO: implement routing analysis (e.g. detect latency patterns that suggest a better route)
+            log.warn("analyze_routing: no routing analysis implemented for synapse #{synapse.id}")
             nil
           end
 
@@ -210,7 +214,7 @@ module Legion
             )
             { output: result[:success] ? Legion::JSON.dump(result[:result]) : nil }
           rescue StandardError => e
-            log.warn("Proposal LLM call failed: #{e.message}")
+            log.error("Proposal LLM call failed: #{e.message}")
             { output: nil }
           end
 

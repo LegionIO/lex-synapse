@@ -8,6 +8,8 @@ module Legion
     module Synapse
       module Runners
         module Retrieve
+          include Legion::Logging::Helper if defined?(Legion::Logging::Helper)
+
           SEED_CONFIDENCE_THRESHOLD = 0.7
 
           def retrieve_and_seed(knowledge_entries:, **)
@@ -45,7 +47,8 @@ module Legion
             return nil unless content
 
             content.is_a?(String) ? Legion::JSON.load(content) : content
-          rescue StandardError => _e
+          rescue StandardError => e
+            log.error("parse_pattern failed: #{e.message}")
             nil
           end
 
