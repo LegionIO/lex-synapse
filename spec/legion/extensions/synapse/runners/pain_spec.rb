@@ -2,9 +2,15 @@
 
 require 'spec_helper'
 require_relative '../../../../../lib/legion/extensions/synapse/runners/pain'
+require_relative '../../../../../lib/legion/extensions/synapse/runners/revert'
 
 RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
-  subject(:handler) { Object.new.extend(described_class) }
+  subject(:handler) do
+    Object.new.tap do |obj|
+      obj.extend(described_class)
+      obj.extend(Legion::Extensions::Synapse::Runners::Revert)
+    end
+  end
 
   let(:synapse) do
     Legion::Extensions::Synapse::Data::Model::Synapse.create(
@@ -18,6 +24,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
   end
 
   after do
+    Legion::Extensions::Synapse::Data::Model::SynapseMutation.where(synapse_id: synapse.id).delete
     Legion::Extensions::Synapse::Data::Model::SynapseSignal.where(synapse_id: synapse.id).delete
     synapse.delete
   end
@@ -69,6 +76,21 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
 
     context 'with 3 consecutive failures' do
       before do
+        # Bump synapse to version 2 and record a mutation so revert has a prior state to restore
+        before_state = Legion::JSON.dump({ attention: nil, transform: nil, routing_strategy: 'direct',
+                                          confidence: 0.8, status: 'active' })
+        after_state  = Legion::JSON.dump({ attention: nil, transform: nil, routing_strategy: 'direct',
+                                          confidence: 0.7, status: 'active' })
+        synapse.update(version: 2)
+        Legion::Extensions::Synapse::Data::Model::SynapseMutation.create(
+          synapse_id:    synapse.id,
+          version:       2,
+          mutation_type: 'confidence_changed',
+          before_state:  before_state,
+          after_state:   after_state,
+          trigger:       'test',
+          outcome:       'applied'
+        )
         3.times do
           Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
             synapse_id:         synapse.id,

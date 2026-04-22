@@ -70,7 +70,7 @@ Each synapse has a confidence score (0.0-1.0) that governs what it's allowed to 
 | 0.0-0.3 | OBSERVE | Log what it would do, pass through unchanged |
 | 0.3-0.6 | FILTER | Can suppress signals, cannot modify |
 | 0.6-0.8 | TRANSFORM | Can filter + transform within defined schemas |
-| 0.8-1.0 | AUTONOMOUS | Can self-modify rules, infer transforms, adjust routing |
+| 0.8-1.0 | AUTONOMOUS | Generates proposals for self-modification |
 
 **Starting scores**: explicit=0.7, emergent=0.3, seeded=0.5
 
@@ -82,7 +82,7 @@ Each synapse has a confidence score (0.0-1.0) that governs what it's allowed to 
 
 Downstream task failures propagate backward through the chain:
 - Each failure reduces confidence by 0.05
-- 3+ consecutive failures trigger auto-revert to last known-good state
+- 3+ consecutive failures trigger auto-revert to last known-good state (calls `revert` directly)
 - Extreme failure rates trigger dampening (homeostasis)
 
 ### Homeostasis
@@ -96,27 +96,27 @@ Downstream task failures propagate backward through the chain:
 ### Evaluate
 `evaluate(synapse_id:, payload:, conditioner_client:, transformer_client:)`
 
-Main signal flow: load synapse, check autonomy, run attention (conditioner), run transform (transformer), record signal, adjust confidence.
+Main signal flow: load synapse → check autonomy → run attention (conditioner) → run transform (transformer) → record signal → adjust confidence → generate proposals if AUTONOMOUS.
 
 ### Pain
 `handle_pain(synapse_id:, task_id:)`
 
-Downstream failure handler. Records failed signal, adjusts confidence, checks for auto-revert threshold, may dampen synapse.
-
-### Crystallize
-`crystallize(signal_pairs:, threshold: 20)`
-
-Bottom-up emergence. Given pairs of `{source_function_id, target_function_id, count}`, creates new synapses for pairs exceeding the threshold.
-
-### Mutate
-`mutate(synapse_id:, mutation_type:, changes:, trigger:)`
-
-Versioned self-modification. Records before/after state snapshots. Types: `attention_adjusted`, `transform_adjusted`, `route_changed`, `confidence_changed`. Triggers: `hebbian`, `pain`, `dream`, `gaia`, `manual`.
+Downstream failure handler. Records failed signal, adjusts confidence, calls `revert` on 3+ consecutive failures, may dampen synapse.
 
 ### Revert
 `revert(synapse_id:, to_version:, trigger:)`
 
-Rolls back to a previous mutation version, restoring the before_state.
+Rolls back to a previous mutation version, restoring `before_state`. Records the revert as a new mutation entry.
+
+### Crystallize
+`crystallize(signal_pairs:, threshold: 20)`
+
+Bottom-up emergence. Creates new synapses for source/target pairs exceeding the threshold.
+
+### Mutate
+`mutate(synapse_id:, mutation_type:, changes:, trigger:)`
+
+Versioned self-modification. Records before/after state snapshots.
 
 ### Report
 `report(synapse_id:)`
@@ -126,17 +126,10 @@ Aggregates stats: confidence, status, 24h signal count, success rate, last mutat
 ### Dream
 `dream(synapse_id:, limit:)`
 
-Replays historical signals in simulation mode without affecting live state. Used by the dream cycle to test routing hypothesis changes.
+Replays historical signals in simulation mode without affecting live state.
 
-### Propose
-`propose(synapse_id:, ...)` / `proposals(synapse_id:, status:)` / `review_proposal(proposal_id:, status:)`
-
-Generates proposed changes (reactive on signal evaluation, proactive on periodic analysis) for AUTONOMOUS-tier synapses. Proposals enter a status lifecycle: pending -> approved/rejected/applied/expired/auto_accepted/auto_rejected.
-
-### Challenge
-`challenge_proposal(proposal_id:)` / `challenges(proposal_id:)` / `challenger_stats`
-
-Runs the adversarial challenge pipeline on pending proposals: conflict detection -> impact scoring -> LLM challenge (gated by impact score) -> weighted aggregation -> auto-accept/reject/await-review outcome.
+### Propose / Challenge
+AUTONOMOUS-tier synapses generate proposals (reactive on evaluation, proactive periodically). Proposals are subjected to a multi-stage challenge pipeline: conflict detection → impact scoring → optional LLM challenge → weighted aggregation → auto-accept/reject.
 
 ## Relationship Wrapper
 
@@ -148,23 +141,15 @@ relationship = { id: 42, trigger_function_id: 1, function_id: 2,
 synapse = Legion::Extensions::Synapse::Helpers::RelationshipWrapper.wrap(relationship)
 ```
 
+## Data Model
+
+Five tables: `synapses` (core routing + confidence + status + blast_radius), `synapse_mutations` (versioned history), `synapse_signals` (per-signal outcomes), `synapse_proposals` (proposal lifecycle), `synapse_challenges` (per-challenge verdicts).
+
 ## Transport
 
 - **Exchange**: `synapse` (inherits from `Legion::Transport::Exchanges::Task`)
 - **Queues**: `synapse.evaluate`, `synapse.pain`
 - **Routing keys**: `synapse.evaluate`, `task.failed`
-
-## Autonomous Observation Mode
-
-AUTONOMOUS-tier synapses (confidence >= 0.8) generate proposals instead of directly executing changes. Proposals are reactive (triggered on signal evaluation) or proactive (generated periodically). The `lex-synapse.proposals.*` settings control enabled state, LLM engine options, and thresholds.
-
-## Adversarial Challenge Phase
-
-Pending proposals are subjected to a multi-stage challenge pipeline: conflict detection among sibling proposals, impact scoring, optional LLM challenge (for high-impact proposals), weighted aggregation across verdicts, and auto-accept/reject based on configurable thresholds. The `lex-synapse.challenge.*` settings control gating.
-
-## Data Model
-
-Five tables: `synapses` (core routing definition + confidence + status), `synapse_mutations` (versioned change history), `synapse_signals` (per-signal outcome records), `synapse_proposals` (proposal lifecycle), `synapse_challenges` (per-challenge verdicts).
 
 ## Dependencies
 

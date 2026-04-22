@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.11] - 2026-04-22
+### Fixed
+- `handle_pain` now actually calls `revert` when consecutive failures reach threshold (was only setting a flag)
+- `analyze_routing` stub now logs warning instead of silently returning nil
+- Silent rescue blocks in `retrieve#parse_pattern` and `propose#call_llm` now log errors
+
 ## [0.4.10] - 2026-04-15
 ### Changed
 - Set `mcp_tools?` and `mcp_tools_deferred?` to `false` — internal infrastructure extension, not an LLM-callable tool
