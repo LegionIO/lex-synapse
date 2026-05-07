@@ -17,13 +17,24 @@ module Legion
             results = { spikes: 0, droughts: 0, updated: 0 }
             return results unless defined?(Legion::Extensions::Synapse::Data::Model::Synapse)
 
-            Legion::Extensions::Synapse::Data::Model::Synapse
+            cutoff = Time.now - 60
+
+            active_synapses = Legion::Extensions::Synapse::Data::Model::Synapse
               .where(status: 'active')
               .where { baseline_throughput > 0 } # rubocop:disable Style/NumericPredicate
-              .each do |synapse|
+              .all
+
+            return results if active_synapses.empty?
+
+            signal_counts = Legion::Extensions::Synapse::Data::Model::SynapseSignal
+              .where(synapse_id: active_synapses.map(&:id))
+              .where { created_at > cutoff }
+              .group_and_count(:synapse_id)
+              .as_hash(:synapse_id, :count)
+
+            active_synapses.each do |synapse|
               baseline = synapse.baseline_throughput
-              signals = synapse.signals_dataset.where { created_at > (Time.now - 60) }.count
-              current = signals.to_f
+              current  = signal_counts.fetch(synapse.id, 0).to_f
 
               if Helpers::Homeostasis.spike?(current, baseline, duration_seconds: 60)
                 results[:spikes] += 1
