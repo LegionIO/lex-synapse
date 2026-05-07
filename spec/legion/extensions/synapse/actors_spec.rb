@@ -39,9 +39,96 @@ RSpec.describe 'Synapse Actors' do
     it('does not use runner') { expect(actor.use_runner?).to be false }
 
     describe '#action' do
+      before do
+        Legion::Extensions::Synapse::Data::Model::SynapseSignal.dataset.delete
+        Legion::Extensions::Synapse::Data::Model::Synapse.dataset.delete
+      end
+
       it 'returns empty results when no active synapses exist' do
         result = actor.action
         expect(result).to include(spikes: 0, droughts: 0, updated: 0)
+      end
+
+      context 'with one active synapse and no recent signals' do
+        let!(:synapse) do
+          Legion::Extensions::Synapse::Data::Model::Synapse.create(
+            status: 'active', baseline_throughput: 10.0
+          )
+        end
+
+        it 'updates the synapse baseline and returns updated count of 1' do
+          result = actor.action
+          expect(result).to include(updated: 1, spikes: 0)
+          synapse.reload
+          expect(synapse.baseline_throughput).to be < 10.0
+        end
+
+        it 'does not issue a per-synapse signals sub-query (no N+1)' do
+          query_log = []
+          db = Sequel::Model.db
+          logger = Object.new
+          logger.define_singleton_method(:info)  { |m| query_log << m }
+          logger.define_singleton_method(:debug) { |m| query_log << m }
+          logger.define_singleton_method(:warn)  { |_m| }
+          logger.define_singleton_method(:error) { |_m| }
+
+          original_loggers = db.loggers.dup
+          db.loggers << logger
+
+          actor.action
+
+          db.loggers.replace(original_loggers)
+
+          signal_queries = query_log.count { |q| q.to_s.include?('synapse_signals') }
+          expect(signal_queries).to be <= 1
+        end
+      end
+
+      context 'with multiple active synapses' do
+        let!(:synapse_a) do
+          Legion::Extensions::Synapse::Data::Model::Synapse.create(
+            status: 'active', baseline_throughput: 5.0
+          )
+        end
+        let!(:synapse_b) do
+          Legion::Extensions::Synapse::Data::Model::Synapse.create(
+            status: 'active', baseline_throughput: 5.0
+          )
+        end
+
+        it 'processes all active synapses in a single signals query' do
+          query_log = []
+          db = Sequel::Model.db
+          logger = Object.new
+          logger.define_singleton_method(:info)  { |m| query_log << m }
+          logger.define_singleton_method(:debug) { |m| query_log << m }
+          logger.define_singleton_method(:warn)  { |_m| }
+          logger.define_singleton_method(:error) { |_m| }
+
+          original_loggers = db.loggers.dup
+          db.loggers << logger
+
+          result = actor.action
+
+          db.loggers.replace(original_loggers)
+
+          expect(result[:updated]).to eq(2)
+          signal_queries = query_log.count { |q| q.to_s.include?('synapse_signals') }
+          expect(signal_queries).to be <= 1
+        end
+      end
+
+      context 'with an inactive synapse' do
+        let!(:inactive) do
+          Legion::Extensions::Synapse::Data::Model::Synapse.create(
+            status: 'inactive', baseline_throughput: 10.0
+          )
+        end
+
+        it 'skips inactive synapses' do
+          result = actor.action
+          expect(result).to include(updated: 0)
+        end
       end
     end
   end
