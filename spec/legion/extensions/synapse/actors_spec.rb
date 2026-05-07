@@ -69,8 +69,8 @@ RSpec.describe 'Synapse Actors' do
           logger = Object.new
           logger.define_singleton_method(:info)  { |m| query_log << m }
           logger.define_singleton_method(:debug) { |m| query_log << m }
-          logger.define_singleton_method(:warn)  { |_m| }
-          logger.define_singleton_method(:error) { |_m| }
+          logger.define_singleton_method(:warn)  { |_m| nil }
+          logger.define_singleton_method(:error) { |_m| nil }
 
           original_loggers = db.loggers.dup
           db.loggers << logger
@@ -102,8 +102,8 @@ RSpec.describe 'Synapse Actors' do
           logger = Object.new
           logger.define_singleton_method(:info)  { |m| query_log << m }
           logger.define_singleton_method(:debug) { |m| query_log << m }
-          logger.define_singleton_method(:warn)  { |_m| }
-          logger.define_singleton_method(:error) { |_m| }
+          logger.define_singleton_method(:warn)  { |_m| nil }
+          logger.define_singleton_method(:error) { |_m| nil }
 
           original_loggers = db.loggers.dup
           db.loggers << logger

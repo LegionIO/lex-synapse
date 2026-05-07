@@ -20,17 +20,17 @@ module Legion
             cutoff = Time.now - 60
 
             active_synapses = Legion::Extensions::Synapse::Data::Model::Synapse
-              .where(status: 'active')
-              .where { baseline_throughput > 0 } # rubocop:disable Style/NumericPredicate
-              .all
+                              .where(status: 'active')
+                              .where { baseline_throughput > 0 } # rubocop:disable Style/NumericPredicate
+                              .all
 
             return results if active_synapses.empty?
 
             signal_counts = Legion::Extensions::Synapse::Data::Model::SynapseSignal
-              .where(synapse_id: active_synapses.map(&:id))
-              .where { created_at > cutoff }
-              .group_and_count(:synapse_id)
-              .as_hash(:synapse_id, :count)
+                            .where(synapse_id: active_synapses.map(&:id))
+                            .where { created_at > cutoff }
+                            .group_and_count(:synapse_id)
+                            .as_hash(:synapse_id, :count)
 
             active_synapses.each do |synapse|
               baseline = synapse.baseline_throughput
