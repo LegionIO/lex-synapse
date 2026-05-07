@@ -191,6 +191,16 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Propose do
         inputs = Legion::JSON.load(proposal.inputs)
         expect(inputs[:success_rate]).to be < 0.8
       end
+
+      it 'stores a challengeable proposed output for proactive proposals' do
+        proposer.propose_proactive
+        proposal = Legion::Extensions::Synapse::Data::Model::SynapseProposal.where(
+          synapse_id: synapse.id, trigger: 'proactive'
+        ).first
+
+        expect(proposal.output).not_to be_nil
+        expect(proposal.output).not_to eq('null')
+      end
     end
 
     context 'with healthy success rate' do
@@ -271,6 +281,22 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Propose do
         result = proposer.propose_proactive
         expect(result[:proposals]).to eq([])
       end
+    end
+  end
+
+  describe '#lookup_target_schema' do
+    it 'returns a discovered target schema when discovery data is available' do
+      discovery = Module.new do
+        def self.function_schema(function_id)
+          { payload: { name: 'String' }, function_id: function_id }
+        end
+      end
+      stub_const('Legion::Extensions::Discovery', discovery)
+      synapse.update(target_function_id: 'lex-target.process')
+
+      schema = proposer.send(:lookup_target_schema, synapse)
+
+      expect(schema).to eq({ payload: { name: 'String' }, function_id: 'lex-target.process' })
     end
   end
 end

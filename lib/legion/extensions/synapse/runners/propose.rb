@@ -135,7 +135,7 @@ module Legion
               synapse: synapse, signal_id: nil, proposal_type: 'transform_mutation',
               trigger: 'proactive',
               inputs: Legion::JSON.dump({ success_rate: rate.round(3), sample_size: signals.size, threshold: threshold }),
-              output: nil,
+              output: proactive_transform_output(synapse, success_rate: rate.round(3), sample_size: signals.size),
               rationale: "success rate #{(rate * 100).round(1)}% below threshold #{(threshold * 100).round(1)}%"
             )
           end
@@ -156,7 +156,7 @@ module Legion
               synapse: synapse, signal_id: nil, proposal_type: 'transform_mutation',
               trigger: 'proactive',
               inputs: Legion::JSON.dump({ drift_rate: drift_rate.round(3), sample_size: signals.size }),
-              output: nil,
+              output: proactive_transform_output(synapse, drift_rate: drift_rate.round(3), sample_size: signals.size),
               rationale: "payload drift detected: #{(drift_rate * 100).round(1)}% transform failures in recent signals"
             )
           end
@@ -226,9 +226,25 @@ module Legion
 
           def lookup_target_schema(synapse)
             return {} unless synapse.target_function_id
-            return {} unless defined?(Legion::Extensions::Lex)
 
-            {}
+            discovery_schema(synapse.target_function_id) || {}
+          end
+
+          def discovery_schema(function_id)
+            discovery = defined?(Legion::Extensions::Discovery) && Legion::Extensions::Discovery
+            return unless discovery.respond_to?(:function_schema)
+
+            discovery.function_schema(function_id)
+          rescue StandardError => e
+            log.debug("lookup_target_schema failed for #{function_id}: #{e.message}")
+            nil
+          end
+
+          def proactive_transform_output(synapse, **metadata)
+            existing = synapse.transform.to_s.strip
+            return existing unless existing.empty?
+
+            Legion::JSON.dump(metadata.merge(action: 'review_transform', synapse_id: synapse.id))
           end
 
           def build_transform_prompt(source_schema, target_schema)

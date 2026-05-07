@@ -7,6 +7,7 @@ require_relative '../data/models/synapse_proposal'
 require_relative '../data/models/synapse_challenge'
 require_relative '../data/models/synapse_signal'
 require_relative 'blast_radius'
+require_relative 'mutate'
 
 module Legion
   module Extensions
@@ -87,10 +88,37 @@ module Legion
             { success: true, proposal_id: proposal_id, success_rate: success_rate, resolved: challenges.size }
           end
 
+          def apply_proposal(proposal_id:)
+            Data::Model.define_synapse_proposal_model
+            Data::Model.define_synapse_model
+
+            proposal = Data::Model::SynapseProposal[proposal_id]
+            return { success: false, error: 'proposal not found' } unless proposal
+            return { success: false, error: 'proposal not approved' } unless %w[approved auto_accepted].include?(proposal.status)
+            return { success: false, error: 'proposal output missing' } if proposal.output.nil? || proposal.output.to_s.strip.empty?
+
+            synapse = Data::Model::Synapse[proposal.synapse_id]
+            return { success: false, error: 'synapse not found' } unless synapse
+
+            mutation = mutation_for_proposal(proposal)
+            return { success: false, error: "unsupported proposal_type: #{proposal.proposal_type}" } unless mutation
+
+            result = Object.new.extend(Mutate).mutate(
+              synapse_id:    proposal.synapse_id,
+              mutation_type: mutation[:mutation_type],
+              changes:       mutation[:changes],
+              trigger:       'gaia'
+            )
+            return result unless result[:success]
+
+            proposal.update(status: 'applied', reviewed_at: Time.now)
+            result.merge(proposal_id: proposal.id, status: 'applied', decision: 'applied')
+          end
+
           def run_challenge_cycle(transformer_client: nil)
             Data::Model.define_synapse_proposal_model
             Data::Model.define_synapse_challenge_model
-            return { challenged: 0, resolved: 0 } unless Helpers::Challenge.enabled?
+            return { challenged: 0, applied: 0, resolved: 0 } unless Helpers::Challenge.enabled?
 
             settings = Helpers::Challenge.settings
             max = settings[:max_per_cycle] || 5
@@ -99,6 +127,12 @@ module Legion
             pending_challenges.first(max).each do |proposal|
               challenge_proposal(proposal_id: proposal.id, transformer_client: transformer_client)
               challenged += 1
+            end
+
+            applied = 0
+            Data::Model::SynapseProposal.where(status: 'auto_accepted').order(Sequel.asc(:id)).limit(max).each do |proposal|
+              result = apply_proposal(proposal_id: proposal.id)
+              applied += 1 if result[:success]
             end
 
             resolved = 0
@@ -118,10 +152,21 @@ module Legion
               resolved += 1
             end
 
-            { challenged: challenged, resolved: resolved }
+            { challenged: challenged, applied: applied, resolved: resolved }
           end
 
           private
+
+          def mutation_for_proposal(proposal)
+            case proposal.proposal_type
+            when 'llm_transform', 'transform_mutation'
+              { mutation_type: 'transform_adjusted', changes: { transform: proposal.output } }
+            when 'attention_mutation'
+              { mutation_type: 'attention_adjusted', changes: { attention: proposal.output } }
+            when 'route_change'
+              { mutation_type: 'route_changed', changes: { routing_strategy: proposal.output } }
+            end
+          end
 
           def conflict_check(proposal)
             conflicts = Data::Model::SynapseProposal.where(
@@ -176,8 +221,8 @@ module Legion
                                                       .exclude(verdict: 'abstain').all
 
             if challenges.empty?
-              proposal.update(challenge_state: 'challenged', challenge_score: 0.5)
-              return { success: true, challenge_score: 0.5, decision: 'challenged' }
+              proposal.update(status: 'auto_accepted', challenge_state: 'challenged', challenge_score: 0.0)
+              return { success: true, challenge_score: 0.0, decision: 'auto_accepted' }
             end
 
             support_weight = challenges.select { |c| c.verdict == 'support' }.sum(&:challenger_confidence)
@@ -253,7 +298,7 @@ module Legion
                                                   .order(Sequel.desc(:id)).limit(20).all
             return Helpers::Challenge.settings[:challenger_starting_confidence] if recent.empty?
 
-            recent.first.challenger_confidence
+            recent.sum(&:challenger_confidence).to_f / recent.size
           end
 
           include Legion::Extensions::Helpers::Lex if defined?(Legion::Extensions::Helpers::Lex)
