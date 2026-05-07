@@ -4,6 +4,7 @@ require 'spec_helper'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/challenge'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/confidence'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/proposals'
+require_relative '../../../../../lib/legion/extensions/synapse/runners/mutate'
 require_relative '../../../../../lib/legion/extensions/synapse/runners/challenge'
 
 RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
@@ -18,6 +19,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
     allow(Legion::Settings).to receive(:dig).with(:data, :connected).and_return(true)
 
     Legion::Extensions::Synapse::Data::Model.define_synapse_model
+    Legion::Extensions::Synapse::Data::Model.define_synapse_mutation_model
     Legion::Extensions::Synapse::Data::Model.define_synapse_proposal_model
     Legion::Extensions::Synapse::Data::Model.define_synapse_challenge_model
     Legion::Extensions::Synapse::Data::Model.define_synapse_signal_model
@@ -26,6 +28,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
   after do
     Legion::Extensions::Synapse::Data::Model::SynapseChallenge.dataset.delete
     Legion::Extensions::Synapse::Data::Model::SynapseSignal.dataset.delete
+    Legion::Extensions::Synapse::Data::Model::SynapseMutation.dataset.delete
     Legion::Extensions::Synapse::Data::Model::SynapseProposal.dataset.delete
     Legion::Extensions::Synapse::Data::Model::Synapse.dataset.delete
   end
@@ -203,6 +206,46 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
     end
   end
 
+  describe '#apply_proposal' do
+    it 'applies an auto-accepted transform proposal through the mutate runner' do
+      proposal.update(status: 'auto_accepted', output: '{"template":"new"}')
+
+      result = runner.apply_proposal(proposal_id: proposal.id)
+
+      proposal.refresh
+      synapse.refresh
+      expect(result[:success]).to be true
+      expect(result[:decision]).to eq('applied')
+      expect(proposal.status).to eq('applied')
+      expect(synapse.transform).to eq('{"template":"new"}')
+    end
+
+    it 'rejects proposals that are not approved or auto-accepted' do
+      result = runner.apply_proposal(proposal_id: proposal.id)
+
+      expect(result[:success]).to be false
+      expect(result[:error]).to eq('proposal not approved')
+    end
+  end
+
+  describe '#rolling_llm_confidence' do
+    it 'averages recent resolved LLM challenger confidence' do
+      [0.2, 0.4, 0.8].each do |confidence|
+        Legion::Extensions::Synapse::Data::Model::SynapseChallenge.create(
+          proposal_id:           proposal.id,
+          challenger_type:       'llm',
+          verdict:               'support',
+          outcome:               'correct',
+          challenger_confidence: confidence,
+          reasoning:             'resolved',
+          resolved_at:           Time.now.utc
+        )
+      end
+
+      expect(runner.send(:rolling_llm_confidence)).to be_within(0.001).of(0.466)
+    end
+  end
+
   describe 'when challenge is disabled' do
     let(:settings_default) { { 'enabled' => false } }
 
@@ -314,6 +357,27 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
         proposal_id: proposal.id, challenger_type: 'llm'
       )
       expect(llm_challenges.count).to eq(1)
+    end
+  end
+
+  describe 'abstaining LLM challenges' do
+    it 'auto-accepts when every challenger abstains' do
+      allow(runner).to receive(:conflict_check)
+      allow(runner).to receive(:llm_challenge) do |proposal_record, _synapse, _client|
+        Legion::Extensions::Synapse::Data::Model::SynapseChallenge.create(
+          proposal_id:           proposal_record.id,
+          challenger_type:       'llm',
+          verdict:               'abstain',
+          reasoning:             'llm unavailable',
+          challenger_confidence: 0.5
+        )
+      end
+
+      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: double('transformer'))
+      proposal.refresh
+
+      expect(proposal.status).to eq('auto_accepted')
+      expect(proposal.challenge_score).to eq(0.0)
     end
   end
 end

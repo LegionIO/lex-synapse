@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.12] - 2026-05-07
+### Fixed
+- Added challenge proposal application through the mutate runner so auto-accepted proposals can advance to `applied` and later resolve challenger outcomes.
+- Averaged resolved LLM challenger confidence, auto-accepted all-abstain challenges, and ensured proactive proposals store a non-empty candidate output.
+- Look up target function schemas through extension discovery when building transform proposals.
+
 ## [0.4.11] - 2026-04-22
 ### Fixed
 - `handle_pain` now actually calls `revert` when consecutive failures reach threshold (was only setting a flag)
