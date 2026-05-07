@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.13] - 2026-05-07
+### Fixed
+- `Homeostasis` actor: replace per-synapse `signals_dataset.count` with a single batched `GROUP BY` query to eliminate N+1 pool contention that caused `Sequel::PoolTimeout` on Postgres
+
 ## [0.4.12] - 2026-05-07
 ### Fixed
 - Added challenge proposal application through the mutate runner so auto-accepted proposals can advance to `applied` and later resolve challenger outcomes.
