@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.14] - 2026-06-01
+### Fixed
+- Homeostasis actor: convert raw signal counts to signals/minute for correct spike/drought comparison; batch all updates in a single DB transaction
+- Evaluate runner: prevent double confidence adjustment when validation fails (`run_transform` already adjusts)
+- Revert mutation: use unique version (`synapse.version + 1`) instead of `restored_version` to avoid version collision
+
 ## [0.4.13] - 2026-05-07
 ### Fixed
 - `Homeostasis` actor: replace per-synapse `signals_dataset.count` with a single batched `GROUP BY` query to eliminate N+1 pool contention that caused `Sequel::PoolTimeout` on Postgres
