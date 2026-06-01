@@ -28,6 +28,7 @@ module Legion
 
             restored_version = mutation_version - 1
             before_state = Legion::JSON.load(mutation.before_state)
+            revert_version = synapse.version + 1
             synapse.update(
               attention:        before_state[:attention],
               transform:        before_state[:transform],
@@ -40,10 +41,10 @@ module Legion
             # Mark the reverted mutation
             mutation.update(outcome: 'reverted')
 
-            # Record the revert as a new mutation
+            # Record the revert as a new mutation (uses a unique version to avoid collision)
             Data::Model::SynapseMutation.create(
               synapse_id:    synapse.id,
-              version:       restored_version,
+              version:       revert_version,
               mutation_type: 'confidence_changed',
               before_state:  mutation.after_state,
               after_state:   mutation.before_state,

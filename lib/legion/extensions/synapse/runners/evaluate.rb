@@ -40,10 +40,15 @@ module Legion
             # Step 3: Record signal
             record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)
 
-            # Step 4: Adjust confidence
-            event = transform_result[:success] ? :success : :failure
-            new_confidence = Helpers::Confidence.adjust(synapse.confidence, event)
-            synapse.update(confidence: new_confidence)
+            # Step 4: Adjust confidence (skip if run_transform already penalized for validation failure)
+            if transform_result[:validation_failure]
+              # run_transform already adjusted confidence; reload to get the updated value
+              new_confidence = synapse.confidence
+            else
+              event = transform_result[:success] ? :success : :failure
+              new_confidence = Helpers::Confidence.adjust(synapse.confidence, event)
+              synapse.update(confidence: new_confidence)
+            end
 
             # Step 5: Generate proposals if autonomous
             if Helpers::Confidence.can_self_modify?(new_confidence) && Helpers::Proposals.reactive?
@@ -100,7 +105,7 @@ module Legion
             else
               new_conf = Helpers::Confidence.adjust(synapse.confidence, :validation_failure)
               synapse.update(confidence: new_conf)
-              { success: false, result: payload, error: result[:errors] }
+              { success: false, result: payload, error: result[:errors], validation_failure: true }
             end
           end
 
