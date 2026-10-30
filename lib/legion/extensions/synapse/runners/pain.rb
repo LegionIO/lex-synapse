@@ -3,12 +3,15 @@
 require_relative '../helpers/confidence'
 require_relative '../data/models/synapse'
 require_relative '../data/models/synapse_signal'
+require_relative 'revert'
 
 module Legion
   module Extensions
     module Synapse
       module Runners
         module Pain
+          include Legion::Extensions::Synapse::Runners::Revert
+
           CONSECUTIVE_FAILURE_THRESHOLD = 3
 
           def handle_pain(synapse_id:, task_id: nil)
@@ -40,6 +43,11 @@ module Legion
               result[:action] = :auto_revert
               revert_result = revert(synapse_id: synapse_id, trigger: 'pain')
               result[:reverted] = revert_result[:success] == true
+              if result[:reverted]
+                synapse.refresh
+                new_confidence = synapse.confidence
+                result[:confidence] = new_confidence
+              end
             end
 
             # Check if confidence dropped below autonomy threshold
@@ -59,6 +67,7 @@ module Legion
 
           def count_consecutive_failures(synapse)
             recent = synapse.signals_dataset
+                            .exclude(downstream_outcome: nil)
                             .order(Sequel.desc(:id))
                             .limit(CONSECUTIVE_FAILURE_THRESHOLD)
                             .all

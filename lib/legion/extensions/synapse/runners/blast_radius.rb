@@ -20,7 +20,7 @@ module Legion
             TIER_CRITICAL => 3.0
           }.freeze
 
-          def compute(**_opts)
+          def compute(**)
             Data::Model.define_synapse_model
             return { success: false, error: 'data unavailable' } unless data_available?
 

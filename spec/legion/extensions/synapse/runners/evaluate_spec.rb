@@ -62,6 +62,47 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Evaluate do
       end
     end
 
+    context 'when required execution capability is unavailable' do
+      it 'does not bypass configured attention or learn from a missing conditioner' do
+        synapse.update(attention: '{"field":"value"}', confidence: 0.85)
+        result = evaluator.evaluate(synapse_id: synapse.id, payload: { a: 1 }, transformer_client: transformer_client)
+
+        expect(result).to include(success: false, passed: false, transformed: false, result: { a: 1 })
+        expect(result[:error]).not_to be_nil
+        expect(synapse.refresh.confidence).to eq(0.85)
+        expect(synapse.signals_dataset.count).to eq(0)
+        expect(synapse.proposals_dataset.count).to eq(0)
+      end
+
+      it 'does not credit or penalize a configured transform without a transformer' do
+        synapse.update(transform: '{"template":"hello"}', confidence: 0.85)
+        result = evaluator.evaluate(synapse_id: synapse.id, payload: { a: 1 })
+
+        expect(result).to include(success: false, passed: true, transformed: false, result: { a: 1 })
+        expect(result[:error]).not_to be_nil
+        expect(synapse.refresh.confidence).to eq(0.85)
+        expect(synapse.signals_dataset.count).to eq(0)
+        expect(synapse.proposals_dataset.count).to eq(0)
+      end
+
+      it 'preserves observe pass-through without learning from unavailable attention' do
+        synapse.update(attention: '{"field":"value"}', confidence: 0.1)
+        result = evaluator.evaluate(synapse_id: synapse.id, payload: { a: 1 })
+
+        expect(result).to include(success: true, passed: true, transformed: false, mode: :observe, result: { a: 1 })
+        expect(synapse.refresh.confidence).to eq(0.1)
+        expect(synapse.signals_dataset.count).to eq(0)
+      end
+
+      it 'does not require a transformer when confidence does not permit transforming' do
+        synapse.update(transform: '{"template":"hello"}', confidence: 0.5)
+        result = evaluator.evaluate(synapse_id: synapse.id, payload: { a: 1 })
+
+        expect(result).to include(success: true, passed: true, transformed: false, result: { a: 1 })
+        expect(synapse.refresh.confidence).to be > 0.5
+      end
+    end
+
     context 'with attention rules and conditioner client' do
       before { synapse.update(attention: '{"field":"value"}') }
 
@@ -100,6 +141,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Evaluate do
       it 'returns transformed result' do
         result = evaluator.evaluate(synapse_id: synapse.id, payload: { a: 1 }, transformer_client: transformer_client)
         expect(result[:result]).to eq({ transformed: true })
+        expect(result[:transformed]).to be true
       end
 
       it 'returns success true' do

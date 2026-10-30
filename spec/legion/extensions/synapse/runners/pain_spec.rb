@@ -5,12 +5,7 @@ require_relative '../../../../../lib/legion/extensions/synapse/runners/pain'
 require_relative '../../../../../lib/legion/extensions/synapse/runners/revert'
 
 RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
-  subject(:handler) do
-    Object.new.tap do |obj|
-      obj.extend(described_class)
-      obj.extend(Legion::Extensions::Synapse::Runners::Revert)
-    end
-  end
+  subject(:handler) { Object.new.extend(described_class) }
 
   let(:synapse) do
     Legion::Extensions::Synapse::Data::Model::Synapse.create(
@@ -69,6 +64,30 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
       expect(result[:consecutive_failures]).to eq(1)
     end
 
+    it 'ignores pending evaluations when counting downstream failures' do
+      2.times do
+        handler.handle_pain(synapse_id: synapse.id)
+        Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+          synapse_id: synapse.id, passed_attention: true, transform_success: true
+        )
+      end
+
+      result = handler.handle_pain(synapse_id: synapse.id)
+      expect(result[:consecutive_failures]).to eq(3)
+      expect(result[:action]).to eq(:auto_revert)
+    end
+
+    it 'ends a failure streak on a completed successful outcome' do
+      handler.handle_pain(synapse_id: synapse.id)
+      Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+        synapse_id: synapse.id, passed_attention: true, transform_success: true, downstream_outcome: 'success'
+      )
+
+      result = handler.handle_pain(synapse_id: synapse.id)
+      expect(result[:consecutive_failures]).to eq(1)
+      expect(result).not_to have_key(:action)
+    end
+
     it 'returns current autonomy mode' do
       result = handler.handle_pain(synapse_id: synapse.id)
       expect(result[:mode]).to be_a(Symbol)
@@ -105,6 +124,8 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
         result = handler.handle_pain(synapse_id: synapse.id)
         expect(result[:action]).to eq(:auto_revert)
         expect(result[:reverted]).to be true
+        expect(result[:confidence]).to eq(synapse.refresh.confidence)
+        expect(result[:mode]).to eq(Legion::Extensions::Synapse::Helpers::Confidence.autonomy_mode(synapse.confidence))
       end
     end
 
