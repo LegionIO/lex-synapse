@@ -27,6 +27,14 @@ module Legion
 
             # Step 1: Attention check
             attention_result = check_attention(synapse, payload, mode, conditioner_client)
+            # Unavailable execution is not evidence for confidence or proposal learning.
+            if attention_result[:unavailable]
+              return {
+                success: mode == :observe, mode: mode, passed: attention_result[:passed],
+                transformed: false, result: payload, error: attention_result[:error],
+                latency_ms: ::Process.clock_gettime(::Process::CLOCK_MONOTONIC, :millisecond) - start_time
+              }
+            end
 
             # Step 2: Transform (if attention passed and confidence allows)
             transform_result = if attention_result[:passed] && Helpers::Confidence.can_transform?(synapse.confidence)
@@ -36,15 +44,19 @@ module Legion
                                end
 
             elapsed = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC, :millisecond) - start_time
+            if transform_result[:unavailable]
+              return {
+                success: false, mode: mode, passed: attention_result[:passed],
+                transformed: false, result: payload, error: transform_result[:error], latency_ms: elapsed
+              }
+            end
 
             # Step 3: Record signal
-            record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)
+            signal_record = record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)
 
             # Step 4: Adjust confidence (skip if run_transform already penalized for validation failure)
-            if transform_result[:validation_failure]
-              # run_transform already adjusted confidence; reload to get the updated value
-              new_confidence = synapse.confidence
-            else
+            new_confidence = synapse.confidence
+            unless transform_result[:validation_failure]
               event = transform_result[:success] ? :success : :failure
               new_confidence = Helpers::Confidence.adjust(synapse.confidence, event)
               synapse.update(confidence: new_confidence)
@@ -52,7 +64,6 @@ module Legion
 
             # Step 5: Generate proposals if autonomous
             if Helpers::Confidence.can_self_modify?(new_confidence) && Helpers::Proposals.reactive?
-              signal_record = Data::Model::SynapseSignal.where(synapse_id: synapse.id).order(Sequel.desc(:id)).first
               propose_reactive(
                 synapse: synapse, payload: payload, signal_id: signal_record&.id,
                 attention_result: attention_result, transform_result: transform_result,
@@ -64,7 +75,7 @@ module Legion
               success:     transform_result[:success],
               mode:        mode,
               passed:      attention_result[:passed],
-              transformed: transform_result[:success],
+              transformed: transform_result[:transformed] == true,
               result:      transform_result[:result],
               latency_ms:  elapsed
             }
@@ -74,13 +85,10 @@ module Legion
 
           def check_attention(synapse, payload, mode, conditioner_client)
             return { passed: true } if synapse.attention.nil? || synapse.attention.empty?
+            return { passed: mode == :observe, unavailable: true, error: 'conditioner unavailable' } unless conditioner_client.respond_to?(:evaluate)
 
-            passed = if conditioner_client
-                       result = conditioner_client.evaluate(conditions: Legion::JSON.load(synapse.attention), values: payload)
-                       result[:valid]
-                     else
-                       true
-                     end
+            result = conditioner_client.evaluate(conditions: Legion::JSON.load(synapse.attention), values: payload)
+            passed = result[:valid]
 
             # In OBSERVE mode, always pass through regardless of result
             passed = true if mode == :observe
@@ -90,7 +98,7 @@ module Legion
 
           def run_transform(synapse, payload, transformer_client)
             return { success: true, result: payload } if synapse.transform.nil? || synapse.transform.empty?
-            return { success: true, result: payload } unless transformer_client
+            return { success: false, result: payload, unavailable: true, error: 'transformer unavailable' } unless transformer_client.respond_to?(:transform)
 
             transform_def = Legion::JSON.load(synapse.transform)
             result = transformer_client.transform(
@@ -101,7 +109,7 @@ module Legion
             )
 
             if result[:success]
-              { success: true, result: result[:result] }
+              { success: true, transformed: true, result: result[:result] }
             else
               new_conf = Helpers::Confidence.adjust(synapse.confidence, :validation_failure)
               synapse.update(confidence: new_conf)

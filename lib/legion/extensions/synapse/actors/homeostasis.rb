@@ -11,7 +11,7 @@ module Legion
           def check_subtask? = false
           def generate_task? = false
 
-          def action(**_opts)
+          def action(**)
             return { status: :skipped, reason: :no_data } unless defined?(Legion::Data)
 
             results = { spikes: 0, droughts: 0, updated: 0 }

@@ -19,23 +19,25 @@ module Legion
             return { success: false, error: "invalid mutation_type: #{mutation_type}" } unless VALID_MUTATION_TYPES.include?(mutation_type)
             return { success: false, error: "invalid trigger: #{trigger}" } unless VALID_TRIGGERS.include?(trigger)
 
-            before_state = snapshot(synapse)
-            apply_changes(synapse, mutation_type, changes)
-            after_state = snapshot(synapse)
+            synapse.db.transaction do
+              synapse.lock!
+              before_state = snapshot(synapse)
+              new_version = [synapse.version, synapse.mutations_dataset.max(:version) || 1].max + 1
+              apply_changes(synapse, mutation_type, changes)
+              synapse.update(version: new_version)
+              after_state = snapshot(synapse)
 
-            new_version = synapse.version + 1
-            synapse.update(version: new_version)
+              Data::Model::SynapseMutation.create(
+                synapse_id:    synapse.id,
+                version:       new_version,
+                mutation_type: mutation_type,
+                before_state:  Legion::JSON.dump(before_state),
+                after_state:   Legion::JSON.dump(after_state),
+                trigger:       trigger
+              )
 
-            Data::Model::SynapseMutation.create(
-              synapse_id:    synapse.id,
-              version:       new_version,
-              mutation_type: mutation_type,
-              before_state:  Legion::JSON.dump(before_state),
-              after_state:   Legion::JSON.dump(after_state),
-              trigger:       trigger
-            )
-
-            { success: true, version: new_version, synapse_id: synapse.id }
+              { success: true, version: new_version, synapse_id: synapse.id }
+            end
           end
 
           private
@@ -46,7 +48,8 @@ module Legion
               transform:        synapse.transform,
               routing_strategy: synapse.routing_strategy,
               confidence:       synapse.confidence,
-              status:           synapse.status
+              status:           synapse.status,
+              version:          synapse.version
             }
           end
 

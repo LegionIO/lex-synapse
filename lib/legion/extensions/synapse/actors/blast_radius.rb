@@ -31,7 +31,7 @@ module Legion
             false
           end
 
-          def action(**_opts)
+          def action(**)
             compute
           end
         end

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.15] - 2026-10-29
+### Fixed
+- Treat missing configured conditioner/transformer capabilities as unavailable rather than successful learning; retain legitimate observe/filter pass-through.
+- Attribute reactive proposals to the signal created by that evaluation and report actual transformation execution.
+- Restore standalone pain-triggered reversion, ignore pending evaluations in completed-outcome failure streaks, and return restored confidence.
+- Make mutation/revert writes transactional and keep history versions unambiguous across repeated reversion, retaining actual before/after snapshots.
+
 ## [0.4.14] - 2026-06-01
 ### Fixed
 - Homeostasis actor: convert raw signal counts to signals/minute for correct spike/drought comparison; batch all updates in a single DB transaction

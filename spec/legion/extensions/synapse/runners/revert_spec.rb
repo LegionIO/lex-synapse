@@ -53,7 +53,43 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Revert do
         synapse.reload
       end
 
-      # to_version is the mutation version to look up; reverted_to is one less (the restored version)
+      it 'allows mutation and reversion again after history has branched' do
+        reverter.revert(synapse_id: synapse.id)
+        synapse.refresh.update(confidence: 0.75)
+        next_mutation = mutator.mutate(synapse_id: synapse.id, mutation_type: 'confidence_changed',
+                                       changes: { confidence: 0.6 }, trigger: 'manual')
+
+        expect(next_mutation[:success]).to be true
+        expect(synapse.refresh.confidence).to eq(0.6)
+        result = reverter.revert(synapse_id: synapse.id)
+
+        expect(result).to include(success: true, reverted_to: 1)
+        expect(synapse.refresh.confidence).to eq(0.75)
+        versions = synapse.mutations_dataset.order(:version).select_map(:version)
+        expect(versions).to eq([2, 3, 4, 5])
+      end
+
+      it 'records the actual state being reverted rather than a stale mutation snapshot' do
+        synapse.update(confidence: 0.4)
+        reverter.revert(synapse_id: synapse.id)
+        audit = synapse.mutations_dataset.order(Sequel.desc(:id)).first
+
+        expect(Legion::JSON.load(audit.before_state)[:confidence]).to eq(0.4)
+        expect(Legion::JSON.load(audit.after_state)[:confidence]).to eq(0.7)
+      end
+
+      it 'rolls back restored state and outcome if the revert history cannot be saved' do
+        allow(Legion::Extensions::Synapse::Data::Model::SynapseMutation).to receive(:create).and_raise(Sequel::DatabaseError, 'write failed')
+
+        expect { reverter.revert(synapse_id: synapse.id) }.to raise_error(Sequel::DatabaseError)
+
+        expect(synapse.refresh.confidence).to eq(0.9)
+        expect(synapse.version).to eq(2)
+        expect(synapse.mutations_dataset.first.outcome).not_to eq('reverted')
+        expect(synapse.mutations_dataset.count).to eq(1)
+      end
+
+      # to_version identifies the mutation whose before_state should be restored.
       it 'reverts to the restored version when to_version specifies the mutation version' do
         result = reverter.revert(synapse_id: synapse.id, to_version: 2)
         expect(result[:success]).to be true

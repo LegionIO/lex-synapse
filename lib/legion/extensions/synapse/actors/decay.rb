@@ -11,7 +11,7 @@ module Legion
           def check_subtask? = false
           def generate_task? = false
 
-          def action(**_opts)
+          def action(**)
             return { status: :skipped, reason: :no_data } unless defined?(Legion::Data)
 
             Data::Model.define_synapse_model

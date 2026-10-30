@@ -23,6 +23,19 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Mutate do
   end
 
   describe '#mutate' do
+    it 'rolls back the synapse when its mutation history cannot be saved' do
+      allow(Legion::Extensions::Synapse::Data::Model::SynapseMutation).to receive(:create).and_raise(Sequel::DatabaseError, 'write failed')
+
+      expect do
+        mutator.mutate(synapse_id: synapse.id, mutation_type: 'confidence_changed',
+                       changes: { confidence: 0.9 }, trigger: 'manual')
+      end.to raise_error(Sequel::DatabaseError)
+
+      expect(synapse.refresh.confidence).to eq(0.7)
+      expect(synapse.version).to eq(1)
+      expect(synapse.mutations_dataset.count).to eq(0)
+    end
+
     context 'with nonexistent synapse' do
       it 'returns error' do
         result = mutator.mutate(synapse_id: 99_999, mutation_type: 'confidence_changed',
