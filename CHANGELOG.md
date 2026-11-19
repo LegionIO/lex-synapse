@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.23] - 2026-11-19
+### Fixed
+- Decay only complete idle hours since the latest activity, persisting a transactional checkpoint to prevent duplicate decay across retries and restarts (fixes #28).
+
 ## [0.4.22] - 2026-11-19
 ### Fixed
 - Defer required challenge reviews when the reviewer is absent, fails, or abstains; retry deferred reviews and prevent unreviewed automatic application (fixes #27).

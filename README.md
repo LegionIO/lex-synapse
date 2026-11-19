@@ -189,3 +189,7 @@ MIT
 ### Required proposal review
 
 The challenge cycle automatically applies auto-accepted proposals. HIGH/CRITICAL blast radius or impact at/above the configured threshold requires a completed LLM review before automatic acceptance/application. Missing reviewers, errors, malformed responses, and abstentions leave the proposal pending with `challenge_state: deferred`; the cycle reports a `deferred` count and retries deferred proposals on later runs. Supply `transformer_client:` to complete required reviews; the scheduled actor currently has no default reviewer and therefore reports these deferrals. Lower-impact proposals retain conflict-based automatic decisions. Explicit operator approval remains a separate application path.
+
+### Idle decay timing
+
+Only active synapses with at least one complete hour since their most recent signal are eligible for idle decay. The actor applies `0.998 ** elapsed_whole_hours`, measuring from the latest of creation time, last signal, and the persisted `last_decay_at` checkpoint. A recent signal resets the idle interval. Fractional hours remain for the next tick. A delayed tick or restart catches up the current idle interval; repeated ticks do not apply the same hours twice. Confidence and the checkpoint are committed together under a synapse row lock. Existing rows start from their creation/latest signal timestamps when no checkpoint exists.
