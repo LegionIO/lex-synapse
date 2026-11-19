@@ -68,6 +68,10 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Homeostasis do
   end
 
   describe '.update_baseline' do
+    it 'seeds an empty baseline from the first traffic window' do
+      expect(described_class.update_baseline(0.0, 10.0)).to eq(10.0)
+    end
+
     it 'applies exponential moving average with default alpha 0.1' do
       result = described_class.update_baseline(100.0, 200.0)
       expect(result).to be_within(0.0001).of(110.0)

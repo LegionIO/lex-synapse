@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.29] - 2026-11-19
+### Fixed
+- Seed zero throughput baselines from the full first traffic window and avoid unchanged baseline writes, preventing false startup spikes (fixes #24).
+
 ## [0.4.28] - 2026-11-19
 ### Fixed
 - Wire the scheduled reviewer through transformer JSON results, prioritize fresh proposals, and persist bounded exponential review retries with expiry (fixes #27).

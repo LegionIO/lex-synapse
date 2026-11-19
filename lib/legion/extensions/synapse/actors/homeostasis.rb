@@ -56,6 +56,8 @@ module Legion
               end
 
               new_baseline = Helpers::Homeostasis.update_baseline(baseline, current)
+              next if new_baseline == baseline
+
               updates << { synapse_id: synapse.id, baseline_throughput: new_baseline }
               results[:updated] += 1
             end
