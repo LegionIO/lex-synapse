@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.22] - 2026-11-19
+### Fixed
+- Defer required challenge reviews when the reviewer is absent, fails, or abstains; retry deferred reviews and prevent unreviewed automatic application (fixes #27).
+
 ## [0.4.21] - 2026-11-19
 ### Fixed
 - Calculate downstream success rate from completed outcomes only, expose unresolved and evaluation counts, and verify duplicate-safe task outcome correlation (fixes #25).

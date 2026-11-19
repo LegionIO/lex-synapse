@@ -8,7 +8,7 @@ module Legion
           VALID_VERDICTS = %w[support challenge abstain].freeze
           VALID_CHALLENGER_TYPES = %w[conflict llm].freeze
           VALID_OUTCOMES = %w[correct incorrect].freeze
-          VALID_CHALLENGE_STATES = %w[challenging challenged].freeze
+          VALID_CHALLENGE_STATES = %w[challenging challenged deferred].freeze
 
           IMPACT_WEIGHTS = {
             'llm_transform'      => 0.7,

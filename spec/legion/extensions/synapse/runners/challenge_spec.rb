@@ -360,24 +360,70 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
     end
   end
 
-  describe 'abstaining LLM challenges' do
-    it 'auto-accepts when every challenger abstains' do
-      allow(runner).to receive(:conflict_check)
-      allow(runner).to receive(:llm_challenge) do |proposal_record, _synapse, _client|
-        Legion::Extensions::Synapse::Data::Model::SynapseChallenge.create(
-          proposal_id:           proposal_record.id,
-          challenger_type:       'llm',
-          verdict:               'abstain',
-          reasoning:             'llm unavailable',
-          challenger_confidence: 0.5
-        )
+  describe 'required review availability' do
+    let(:transformer) { double('transformer_client') }
+
+    before do
+      synapse.update(blast_radius: 'HIGH')
+      allow(runner).to receive(:log).and_return(double('logger', warn: nil))
+    end
+
+    %w[HIGH CRITICAL].each do |tier|
+      it "defers #{tier} proposals when the scheduled cycle has no reviewer" do
+        synapse.update(blast_radius: tier)
+        proposal
+        expect(runner.run_challenge_cycle).to include(deferred: 1, applied: 0, challenged: 0)
+        expect(proposal.refresh.status).to eq('pending')
+        expect(proposal.challenge_state).to eq('deferred')
+        expect(synapse.refresh.transform).to be_nil
+        expect(runner.pending_challenges.map(&:id)).to include(proposal.id)
       end
+    end
 
-      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: double('transformer'))
-      proposal.refresh
+    [
+      { success: false },
+      { success: true, result: 'VERDICT: ABSTAIN' },
+      { success: true, result: 'not a review' }
+    ].each do |response|
+      it "defers incomplete review #{response.inspect} and permits a later retry" do
+        allow(transformer).to receive(:transform).and_return(response)
+        result = runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)
+        expect(result).to include(deferred: true, reason: :review_incomplete)
+        expect(proposal.refresh.status).to eq('pending')
 
-      expect(proposal.status).to eq('auto_accepted')
-      expect(proposal.challenge_score).to eq(0.0)
+        allow(transformer).to receive(:transform).and_return(success: true, result: 'VERDICT: SUPPORT')
+        expect(runner.run_challenge_cycle(transformer_client: transformer)).to include(applied: 1, deferred: 0)
+        expect(synapse.refresh.transform).to eq(proposal.output)
+        expect(Legion::Extensions::Synapse::Data::Model::SynapseChallenge.where(
+          proposal_id: proposal.id, challenger_type: 'conflict'
+        ).count).to eq(1)
+      end
+    end
+
+    it 'keeps a reviewer exception deferred and does not mutate routing' do
+      allow(transformer).to receive(:transform).and_raise(StandardError, 'review unavailable')
+      expect(runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)).to include(deferred: true)
+      expect(proposal.refresh.challenge_state).to eq('deferred')
+      expect(synapse.refresh.transform).to be_nil
+    end
+
+    it 'defers previously auto-accepted proposals lacking required review' do
+      proposal.update(status: 'auto_accepted', challenge_state: 'challenged')
+      expect(runner.run_challenge_cycle).to include(deferred: 1, applied: 0)
+      expect(proposal.refresh.status).to eq('pending')
+      expect(synapse.refresh.transform).to be_nil
+    end
+
+    it 'preserves lower-impact automatic application without an LLM review' do
+      synapse.update(blast_radius: 'LOW')
+      proposal
+      expect(runner.run_challenge_cycle).to include(applied: 1, deferred: 0)
+    end
+
+    it 'requires review for high impact even at LOW blast radius' do
+      synapse.update(blast_radius: 'LOW', baseline_throughput: 1.0)
+      2.times { Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id) }
+      expect(runner.challenge_proposal(proposal_id: proposal.id)).to include(deferred: true, reason: :reviewer_unavailable)
     end
   end
 end
