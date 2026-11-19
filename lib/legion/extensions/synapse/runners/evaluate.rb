@@ -14,7 +14,7 @@ module Legion
         module Evaluate
           include Propose
 
-          def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil)
+          def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil, **)
             Data::Model.define_synapse_model
             Data::Model.define_synapse_signal_model
             Data::Model.define_synapse_proposal_model
@@ -22,6 +22,7 @@ module Legion
             return { success: false, error: 'synapse not found' } unless synapse
             return { success: false, error: 'synapse not active' } unless Helpers::Confidence::EVALUABLE_STATUSES.include?(synapse.status)
 
+            proposal_eligible = Legion::Extensions::Synapse::Helpers::Confidence.can_self_modify?(synapse.confidence)
             mode = Helpers::Confidence.autonomy_mode(synapse.confidence)
             start_time = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC, :millisecond)
 
@@ -55,15 +56,10 @@ module Legion
             signal_record = record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)
 
             # Step 4: Adjust confidence (skip if run_transform already penalized for validation failure)
-            new_confidence = synapse.confidence
-            unless transform_result[:validation_failure]
-              event = transform_result[:success] ? :success : :failure
-              new_confidence = Helpers::Confidence.adjust(synapse.confidence, event)
-              synapse.update(confidence: new_confidence)
-            end
+            new_confidence = adjust_evaluation_confidence(synapse: synapse, transform_result: transform_result)
 
             # Step 5: Generate proposals if autonomous
-            if Helpers::Confidence.can_self_modify?(new_confidence) && Helpers::Proposals.reactive?
+            if (proposal_eligible || Helpers::Confidence.can_self_modify?(new_confidence)) && Helpers::Proposals.reactive?
               propose_reactive(
                 synapse: synapse, payload: payload, signal_id: signal_record&.id,
                 attention_result: attention_result, transform_result: transform_result,
@@ -77,11 +73,24 @@ module Legion
               passed:      attention_result[:passed],
               transformed: transform_result[:transformed] == true,
               result:      transform_result[:result],
-              latency_ms:  elapsed
+              latency_ms:  elapsed,
+              signal_id:   signal_record.id
             }
           end
 
           private
+
+          def adjust_evaluation_confidence(synapse:, transform_result:)
+            return synapse.confidence if transform_result[:validation_failure]
+
+            event = transform_result[:success] ? :success : :failure
+            streak = event == :success ? synapse.consecutive_successes + 1 : 0
+            confidence = Legion::Extensions::Synapse::Helpers::Confidence.adjust(
+              synapse.confidence, event, consecutive_successes: streak
+            )
+            synapse.update(confidence: confidence, consecutive_successes: streak)
+            confidence
+          end
 
           def check_attention(synapse, payload, mode, conditioner_client)
             return { passed: true } if synapse.attention.nil? || synapse.attention.empty?
@@ -112,7 +121,7 @@ module Legion
               { success: true, transformed: true, result: result[:result] }
             else
               new_conf = Helpers::Confidence.adjust(synapse.confidence, :validation_failure)
-              synapse.update(confidence: new_conf)
+              synapse.update(confidence: new_conf, consecutive_successes: 0)
               { success: false, result: payload, error: result[:errors], validation_failure: true }
             end
           end

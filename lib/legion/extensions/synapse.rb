@@ -2,6 +2,7 @@
 
 require 'legion/extensions/synapse/version'
 require_relative 'synapse/client'
+require 'legion/extensions/synapse/integration'
 
 module Legion
   module Extensions

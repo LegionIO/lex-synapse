@@ -74,9 +74,9 @@ Each synapse has a confidence score (0.0-1.0) that governs what it's allowed to 
 
 **Starting scores**: explicit=0.7, emergent=0.3, seeded=0.5
 
-**Adjustments**: success +0.02, failure -0.05, validation failure -0.03, 50+ consecutive successes +0.05 bonus
+**Adjustments**: success +0.02, failure -0.05, validation failure -0.03, more than 50 consecutive successful evaluations +0.05 bonus (streak persisted; failures reset it)
 
-**Decay**: Unused synapses fade at 0.998x per hour (~15% per day of inactivity)
+**Decay**: Unused synapses fade at 0.998x per hour (~4.7% per day of inactivity; half-life ~14.4 days)
 
 ### Pain Signals
 
@@ -97,6 +97,21 @@ Downstream task failures propagate backward through the chain:
 `evaluate(synapse_id:, payload:, conditioner_client:, transformer_client:)`
 
 Main signal flow: load synapse → check autonomy → run attention (conditioner) → run transform (transformer) → record signal → adjust confidence → generate proposals if AUTONOMOUS.
+
+### Task-chain integration
+
+With `lex-tasker` >= 0.4.1 and this extension loaded, relationships explicitly wrapped
+as synapses are evaluated before child task creation. Unwrapped relationships retain
+the ordinary conditioner/transformer pipeline. Suppressed or unavailable evaluations
+do not dispatch a child; accepted evaluations pass their result directly to the target
+without applying the relationship's rules a second time. Task payloads must be hashes.
+Delayed children retain the evaluated payload and its signal correlation.
+
+The LegionIO host's `task.failed` and `task.completed` events update the correlated
+signal by task ID and target runner/function. Intermediate stage events and repeated
+completion events do not count as additional outcomes. This integration uses the host
+event bus for outcomes and synchronous evaluation at dispatch; it does not depend on
+an AMQP producer publishing `synapse.evaluate` or `task.failed`.
 
 ### Pain
 `handle_pain(synapse_id:, task_id:)`

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.16] - 2026-11-19
+### Fixed
+- Correct the documented hourly decay conversion to approximately 4.7% daily and a 14.4-day half-life (fixes #17).
+- Preserve reactive repair eligibility across a failure penalty and persist consecutive successes for the existing >50 bonus, resetting the streak on failure (fixes #16).
+- Connect wrapped relationship evaluation to lex-tasker 0.4.1 and subscribe to host task completion/failure events with durable task/signal correlation and duplicate outcome protection (fixes #18).
+
 ## [0.4.15] - 2026-10-29
 ### Fixed
 - Treat missing configured conditioner/transformer capabilities as unavailable rather than successful learning; retain legitimate observe/filter pass-through.
