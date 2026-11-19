@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'legion/extensions/synapse/actors/challenge'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/challenge'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/confidence'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/proposals'
@@ -376,7 +377,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
         expect(proposal.refresh.status).to eq('pending')
         expect(proposal.challenge_state).to eq('deferred')
         expect(synapse.refresh.transform).to be_nil
-        expect(runner.pending_challenges.map(&:id)).to include(proposal.id)
+        expect(runner.pending_challenges.map(&:id)).not_to include(proposal.id)
       end
     end
 
@@ -391,6 +392,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
         expect(result).to include(deferred: true, reason: :review_incomplete)
         expect(proposal.refresh.status).to eq('pending')
 
+        proposal.update(next_review_at: Time.now - 1)
         allow(transformer).to receive(:transform).and_return(success: true, result: 'VERDICT: SUPPORT')
         expect(runner.run_challenge_cycle(transformer_client: transformer)).to include(applied: 1, deferred: 0)
         expect(synapse.refresh.transform).to eq(proposal.output)
@@ -398,6 +400,55 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
           proposal_id: proposal.id, challenger_type: 'conflict'
         ).count).to eq(1)
       end
+    end
+
+    it 'uses the scheduled actor reviewer through the real transformer JSON engine' do
+      llm = Module.new do
+        def self.started? = true
+        def self.chat(**) = nil
+      end
+      stub_const('Legion::LLM', llm)
+      expect(llm).to receive(:chat).with(hash_including(message: include('JSON object')))
+                                   .and_return(Struct.new(:content).new('{"verdict":"support","reasoning":"sound"}'))
+      proposal
+      actor = Legion::Extensions::Synapse::Actor::Challenge.allocate
+      result = actor.public_send(actor.runner_function, **actor.args)
+      expect(result).to include(applied: 1, deferred: 0)
+      expect(proposal.refresh.status).to eq('applied')
+    end
+
+    it 'processes new low-impact proposals ahead of a full deferred queue' do
+      5.times do
+        older = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+          synapse_id: synapse.id, proposal_type: 'transform_mutation', trigger: 'proactive', status: 'pending'
+        )
+        runner.challenge_proposal(proposal_id: older.id)
+        older.update(next_review_at: Time.now - 1)
+      end
+      quiet = Legion::Extensions::Synapse::Data::Model::Synapse.create(confidence: 0.5, status: 'active')
+      fresh = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: quiet.id, proposal_type: 'transform_mutation', trigger: 'proactive', status: 'pending', output: '{}'
+      )
+      expect(runner.run_challenge_cycle).to include(applied: 1)
+      expect(fresh.refresh.status).to eq('applied')
+    end
+
+    it 'persists exponential retry backoff and expires repeated reviewer failures' do
+      allow(transformer).to receive(:transform).and_return(success: true, result: 'unparseable')
+      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)
+      expect(proposal.refresh.review_attempts).to eq(1)
+      expect(proposal.next_review_at - Time.now).to be_between(298, 301)
+      10.times { runner.run_challenge_cycle(transformer_client: transformer) }
+      expect(transformer).to have_received(:transform).once
+      proposal.update(next_review_at: Time.now - 1)
+      runner.run_challenge_cycle(transformer_client: transformer)
+      expect(proposal.refresh.next_review_at - Time.now).to be_between(598, 601)
+      proposal.update(next_review_at: Time.now - 1)
+      runner.run_challenge_cycle(transformer_client: transformer)
+      expect(proposal.refresh.status).to eq('expired')
+      expect(proposal.review_attempts).to eq(3)
+      runner.run_challenge_cycle(transformer_client: transformer)
+      expect(transformer).to have_received(:transform).exactly(3).times
     end
 
     it 'keeps a reviewer exception deferred and does not mutate routing' do

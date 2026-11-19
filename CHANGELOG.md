@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.28] - 2026-11-19
+### Fixed
+- Wire the scheduled reviewer through transformer JSON results, prioritize fresh proposals, and persist bounded exponential review retries with expiry (fixes #27).
+
 ## [0.4.27] - 2026-11-19
 ### Fixed
 - Start existing decay checkpoints at upgrade time and use conditional SQL multiplication without explicit locks, preserving concurrent confidence updates and newly arrived traffic (fixes #28).

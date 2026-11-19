@@ -123,7 +123,7 @@ AUTONOMOUS-tier synapses generate reactive or proactive proposals. `run_challeng
 
 ## Adversarial Challenge Phase
 
-Impact scoring determines whether LLM review is required: impact >= the configured threshold (default 0.3) or HIGH/CRITICAL blast radius. Missing reviewers, errors, malformed responses, and abstentions leave a proposal pending with `challenge_state: deferred`. Deferred proposals remain retryable. After completed review, conflict detection and weighted aggregation determine the decision: support weight / total weight, >= 0.85 auto-accepts and <= 0.15 auto-rejects by default. Lower-impact proposals retain conflict-only decisions. The scheduled actor has no default reviewer and reports deferred counts; the standalone client uses its injected reviewer. Settings: `lex-synapse.challenge.*`.
+Impact scoring determines whether LLM review is required: impact >= the configured threshold (default 0.3) or HIGH/CRITICAL blast radius. Missing reviewers, errors, malformed responses, and abstentions leave a proposal pending with `challenge_state: deferred`. Deferred proposals retry with persisted exponential backoff (300 seconds initially, capped at 3600) and expire after three incomplete attempts; due new proposals precede retries. After completed review, conflict detection and weighted aggregation determine the decision: support weight / total weight, >= 0.85 auto-accepts and <= 0.15 auto-rejects by default. Lower-impact proposals retain conflict-only decisions. The scheduled actor constructs a transformer client and consumes JSON verdicts; the standalone client uses its injected reviewer. Settings: `lex-synapse.challenge.*`.
 
 ## GAIA / Apollo Integration
 

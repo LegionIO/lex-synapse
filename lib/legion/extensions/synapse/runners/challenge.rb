@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'legion/logging/helper'
+
 require_relative '../helpers/challenge'
 require_relative '../helpers/confidence'
 require_relative '../data/models/synapse'
@@ -14,13 +16,15 @@ module Legion
     module Synapse
       module Runners
         module Challenge
+          include Legion::Logging::Helper
           include BlastRadius
 
           def pending_challenges
             Data::Model.define_synapse_proposal_model
             Data::Model::SynapseProposal.where(status: 'pending')
                                         .where(Sequel.|({ challenge_state: nil }, { challenge_state: 'deferred' }))
-                                        .order(Sequel.asc(:id)).all
+                                        .where(Sequel.|({ next_review_at: nil }, Sequel[:next_review_at] <= Time.now))
+                                        .order(Sequel.case({ { challenge_state: nil } => 0 }, 1), Sequel.asc(:id)).all
           end
 
           def challenge_proposal(proposal_id:, transformer_client: nil, **)
@@ -40,7 +44,16 @@ module Legion
             synapse = Data::Model::Synapse[proposal.synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 
-            proposal.update(challenge_state: 'challenging')
+            if proposal.next_review_at && proposal.next_review_at > Time.now
+              return { success: false, deferred: true, proposal_id: proposal.id, reason: :review_backoff }
+            end
+
+            claimed = Data::Model::SynapseProposal.where(id: proposal.id, status: 'pending',
+                                                         challenge_state: proposal.challenge_state,
+                                                         review_attempts: proposal.review_attempts).update(challenge_state: 'challenging')
+            return { success: false, error: 'proposal already claimed' } if claimed.zero?
+
+            proposal.refresh
 
             impact = calculate_impact_score(proposal, synapse)
             confidence_impact = estimate_confidence_impact(proposal, synapse)
@@ -177,8 +190,14 @@ module Legion
           end
 
           def defer_review(proposal:, reason:)
-            proposal.update(status: 'pending', challenge_state: 'deferred', challenge_score: nil)
-            { success: false, deferred: true, proposal_id: proposal.id, decision: 'deferred', reason: reason }
+            settings = Legion::Extensions::Synapse::Helpers::Challenge.settings
+            attempts = proposal.review_attempts + 1
+            expired = attempts >= settings[:review_max_attempts]
+            delay = [settings[:review_retry_seconds] * (2**(attempts - 1)), settings[:review_max_retry_seconds]].min
+            proposal.update(status: expired ? 'expired' : 'pending', challenge_state: 'deferred', challenge_score: nil,
+                            review_attempts: attempts, next_review_at: expired ? nil : Time.now + delay)
+            { success: false, deferred: !expired, expired: expired, proposal_id: proposal.id,
+              decision: expired ? 'expired' : 'deferred', reason: reason }
           end
 
           def mutation_for_proposal(proposal)
@@ -232,7 +251,7 @@ module Legion
               challenger_confidence: llm_confidence
             )
           rescue StandardError => e
-            log.warn("Challenge LLM call failed: #{e.message}")
+            handle_exception(e, level: :warn, operation: :challenge_llm, proposal_id: proposal.id)
             Data::Model::SynapseChallenge.create(
               proposal_id: proposal.id, challenger_type: 'llm',
               verdict: 'abstain', reasoning: "LLM error: #{e.message}",
@@ -293,12 +312,16 @@ module Legion
               "Rationale: #{proposal.rationale}\n" \
               "Proposed inputs: #{proposal.inputs}\n" \
               "Proposed output: #{proposal.output}\n\n" \
-              "Is this change sound? Respond in exactly this format:\n" \
-              "VERDICT: SUPPORT or CHALLENGE or ABSTAIN\n" \
-              'REASONING: one sentence explanation'
+              'Is this change sound? Respond with a JSON object containing "verdict" ("support", "challenge", or "abstain") ' \
+              'and "reasoning" (one sentence explanation).'
           end
 
           def parse_llm_verdict(response)
+            if response.is_a?(Hash)
+              verdict = response[:verdict].to_s.downcase
+              verdict = 'abstain' unless Legion::Extensions::Synapse::Helpers::Challenge::VALID_VERDICTS.include?(verdict)
+              return [verdict, response[:reasoning].to_s.slice(0, 200)]
+            end
             return ['abstain', 'no LLM response'] unless response.is_a?(String)
 
             text = response.to_s.strip
