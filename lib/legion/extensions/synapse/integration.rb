@@ -46,17 +46,15 @@ module Legion
 
             model = Legion::Extensions::Synapse::Data::Model::SynapseSignal
             recorded = 0
-            model.db.transaction do
-              model.where(task_id: task_id, downstream_outcome: nil,
-                          target_runner_class: runner_class.to_s, target_function: function.to_s).all.each do |signal|
-                if outcome == :failed
-                  result = Legion::Extensions::Synapse::Client.new.handle_pain(
-                    synapse_id: signal.synapse_id, task_id: task_id, signal_id: signal.id
-                  )
-                  recorded += 1 if result[:success] && !result[:duplicate]
-                else
-                  recorded += model.where(id: signal.id, downstream_outcome: nil).update(downstream_outcome: 'success')
-                end
+            model.where(task_id: task_id, downstream_outcome: nil,
+                        target_runner_class: runner_class.to_s, target_function: function.to_s).all.each do |signal|
+              if outcome == :failed
+                result = Legion::Extensions::Synapse::Client.new.handle_pain(
+                  synapse_id: signal.synapse_id, task_id: task_id, signal_id: signal.id
+                )
+                recorded += 1 if result[:success] && !result[:duplicate]
+              else
+                recorded += record_success(signal: signal)
               end
             end
             { recorded: recorded }
@@ -69,6 +67,24 @@ module Legion
               @event_bus = events
               events.on('task.failed') { |event| record_outcome(**event, outcome: :failed) }
               events.on('task.completed') { |event| record_outcome(**event, outcome: :success) }
+            end
+          end
+
+          private
+
+          def record_success(signal:)
+            # Only the outcome claim and its confidence credit are atomic; pain/revert
+            # never run within an outer outcome transaction.
+            signal.db.transaction do
+              changed = signal.class.where(id: signal.id, downstream_outcome: nil).update(
+                downstream_outcome: 'success', success_credit_pending: false
+              )
+              if changed.positive? && signal.success_credit_pending
+                Legion::Extensions::Synapse::Data::Model.define_synapse_model
+                synapse = Legion::Extensions::Synapse::Data::Model::Synapse[signal.synapse_id]
+                Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :success)
+              end
+              changed
             end
           end
         end

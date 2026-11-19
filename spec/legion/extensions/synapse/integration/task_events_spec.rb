@@ -85,4 +85,74 @@ RSpec.describe Legion::Extensions::Synapse::Integration do
     expect(described_class.record_outcome(task_id: nil, outcome: :failed, runner_class: 'Example::Target', function: 'consume')).to eq(recorded: 0)
     expect(described_class.record_outcome(task_id: 999, outcome: :failed, runner_class: 'Example::Target', function: 'consume')).to eq(recorded: 0)
   end
+
+  it 'recovers observe confidence from confirmed successes exactly once per signal' do
+    synapse.update(confidence: 0.25)
+    3.times do |task_id|
+      evaluation = client.evaluate(synapse_id: synapse.id)
+      expect(evaluation[:mode]).to eq(:observe)
+      described_class.attach_task(signal_id: evaluation[:signal_id], task_id: task_id, runner_class: 'Example::Target', function: 'consume')
+      2.times do
+        described_class.record_outcome(task_id: task_id, outcome: :success, runner_class: 'Example::Target', function: 'consume')
+      end
+    end
+
+    expect(synapse.refresh.confidence).to be_within(0.0001).of(0.31)
+    expect(synapse.consecutive_successes).to eq(3)
+    expect(synapse.signals_dataset.where(success_credit_pending: true).count).to eq(0)
+    expect(client.evaluate(synapse_id: synapse.id)[:mode]).to eq(:filter)
+  end
+
+  it 'does not award an evaluation success twice after confidence falls into observe mode' do
+    evaluation = client.evaluate(synapse_id: synapse.id)
+    expect(synapse.refresh.confidence).to be_within(0.0001).of(0.72)
+    described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 456, runner_class: 'Example::Target', function: 'consume')
+    synapse.update(confidence: 0.2)
+
+    described_class.record_outcome(task_id: 456, outcome: :success, runner_class: 'Example::Target', function: 'consume')
+
+    expect(synapse.refresh.confidence).to eq(0.2)
+    expect(synapse.consecutive_successes).to eq(1)
+  end
+
+  it 'credits observed work using current confidence and streak when its result arrives' do
+    synapse.update(confidence: 0.25)
+    evaluation = client.evaluate(synapse_id: synapse.id)
+    described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 456, runner_class: 'Example::Target', function: 'consume')
+    synapse.update(confidence: 0.7, consecutive_successes: 50)
+
+    described_class.record_outcome(task_id: 456, outcome: :success, runner_class: 'Example::Target', function: 'consume')
+
+    expect(synapse.refresh.confidence).to be_within(0.0001).of(0.77)
+    expect(synapse.consecutive_successes).to eq(51)
+  end
+
+  it 'rolls back the success claim if applying its credit fails' do
+    synapse.update(confidence: 0.25)
+    evaluation = client.evaluate(synapse_id: synapse.id)
+    described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 456, runner_class: 'Example::Target', function: 'consume')
+    allow(Legion::Extensions::Synapse::Helpers::Confidence).to receive(:adjust_persisted).and_raise(Sequel::DatabaseError, 'write failed')
+
+    expect do
+      described_class.record_outcome(task_id: 456, outcome: :success, runner_class: 'Example::Target', function: 'consume')
+    end.to raise_error(Sequel::DatabaseError, 'write failed')
+
+    signal = synapse.signals_dataset.first
+    expect(signal.downstream_outcome).to be_nil
+    expect(signal.success_credit_pending).to be true
+    expect(synapse.refresh.confidence).to eq(0.25)
+  end
+
+  it 'calls pain outside an enclosing outcome transaction' do
+    evaluation = client.evaluate(synapse_id: synapse.id)
+    described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 456, runner_class: 'Example::Target', function: 'consume')
+    allow(Legion::Extensions::Synapse::Client).to receive(:new).and_return(client)
+    allow(client).to receive(:handle_pain).and_wrap_original do |handle_pain, **arguments|
+      expect(synapse.db.in_transaction?).to be false
+      handle_pain.call(**arguments)
+    end
+
+    expect(described_class.record_outcome(task_id: 456, outcome: :failed, runner_class: 'Example::Target', function: 'consume')).to eq(recorded: 1)
+    expect(synapse.signals_dataset.first.downstream_outcome).to eq('failed')
+  end
 end

@@ -45,6 +45,20 @@ module Legion
               clamp(confidence * (DECAY_RATE**hours))
             end
 
+            # Arithmetic uses the current stored values, never a caller's stale snapshot.
+            def adjust_persisted(synapse:, event:, **)
+              delta = ADJUSTMENTS.fetch(event)
+              streak = event == :success ? Sequel[:consecutive_successes] + 1 : 0
+              adjustment = delta
+              adjustment += Sequel.case({ (streak > CONSECUTIVE_BONUS_THRESHOLD) => ADJUSTMENTS[:consecutive_bonus] }, 0) if event == :success
+              confidence = Sequel[:confidence] + adjustment
+              clamped = Sequel.case({ (confidence < 0.0) => 0.0, (confidence > 1.0) => 1.0 }, confidence)
+              synapse.class.where(id: synapse.id).update(confidence: clamped, consecutive_successes: streak)
+              synapse.refresh
+              Legion::Events.emit('synapse.confidence_update', delta: delta, event: event, new_confidence: synapse.confidence) if defined?(Legion::Events)
+              synapse.confidence
+            end
+
             def autonomy_mode(confidence)
               AUTONOMY_RANGES.each do |mode, range|
                 return mode if range.include?(confidence)

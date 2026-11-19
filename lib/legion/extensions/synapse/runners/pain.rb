@@ -24,7 +24,7 @@ module Legion
             if signal_id
               changed = Legion::Extensions::Synapse::Data::Model::SynapseSignal
                         .where(id: signal_id, synapse_id: synapse_id, task_id: task_id, downstream_outcome: nil)
-                        .update(downstream_outcome: 'failed')
+                        .update(downstream_outcome: 'failed', success_credit_pending: false)
               return { success: true, duplicate: true } if changed.zero?
             else
               Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
@@ -34,8 +34,7 @@ module Legion
             end
 
             # Adjust confidence
-            new_confidence = Helpers::Confidence.adjust(synapse.confidence, :failure)
-            synapse.update(confidence: new_confidence, consecutive_successes: 0)
+            new_confidence = Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :failure)
 
             # Check consecutive failures
             consecutive = count_consecutive_failures(synapse)

@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.26] - 2026-11-19
+### Fixed
+- Recover observe-mode confidence from confirmed downstream successes once, preserve evaluation credit provenance, and update confidence/streaks atomically in SQL; keep failure outcome handling outside a broad transaction (fixes #15, fixes #16).
+
 ## [0.4.25] - 2026-11-19
 ### Fixed
 - Align README and agent notes with callable client/runner APIs, mutation-history simulation, automatic proposal review/application, and current tasker/Apollo integration limits (fixes #31).

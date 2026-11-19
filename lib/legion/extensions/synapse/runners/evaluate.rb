@@ -53,7 +53,8 @@ module Legion
             end
 
             # Step 3: Record signal
-            signal_record = record_signal(synapse, attention_result[:observed_passed], transform_result[:success], elapsed)
+            signal_record = record_signal(synapse, attention_result[:observed_passed], transform_result[:success], elapsed,
+                                          success_credit_pending: mode == :observe && transform_result[:success])
 
             # Step 4: Observation and correct filtering are neutral; transform failures are penalized once.
             new_confidence = adjust_evaluation_confidence(synapse: synapse, transform_result: transform_result,
@@ -86,12 +87,7 @@ module Legion
             return synapse.confidence if transform_result[:validation_failure]
 
             event = transform_result[:success] ? :success : :failure
-            streak = event == :success ? synapse.consecutive_successes + 1 : 0
-            confidence = Legion::Extensions::Synapse::Helpers::Confidence.adjust(
-              synapse.confidence, event, consecutive_successes: streak
-            )
-            synapse.update(confidence: confidence, consecutive_successes: streak)
-            confidence
+            Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: event)
           end
 
           def check_attention(synapse, payload, mode, conditioner_client)
@@ -118,18 +114,18 @@ module Legion
             if result[:success]
               { success: true, transformed: true, result: result[:result] }
             else
-              new_conf = Helpers::Confidence.adjust(synapse.confidence, :validation_failure)
-              synapse.update(confidence: new_conf, consecutive_successes: 0)
+              Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :validation_failure)
               { success: false, result: payload, error: result[:errors], validation_failure: true }
             end
           end
 
-          def record_signal(synapse, passed_attention, transform_success, latency_ms)
+          def record_signal(synapse, passed_attention, transform_success, latency_ms, success_credit_pending: false)
             Data::Model::SynapseSignal.create(
-              synapse_id:        synapse.id,
-              passed_attention:  passed_attention,
-              transform_success: transform_success,
-              latency_ms:        latency_ms.to_i
+              synapse_id:             synapse.id,
+              passed_attention:       passed_attention,
+              transform_success:      transform_success,
+              latency_ms:             latency_ms.to_i,
+              success_credit_pending: success_credit_pending
             )
           end
 

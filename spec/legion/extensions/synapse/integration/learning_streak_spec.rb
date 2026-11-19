@@ -65,4 +65,54 @@ RSpec.describe 'Synapse repair eligibility and consecutive successes' do
     expect(synapse.refresh.consecutive_successes).to eq(1)
     expect(synapse.confidence).to be_within(0.0001).of(0.67)
   end
+
+  it 'applies success and its streak bonus to updates committed during evaluation' do
+    synapse.update(transform: '{"template":"hello"}')
+    allow(transformer).to receive(:transform) do
+      synapse.update(confidence: 0.4, consecutive_successes: 50)
+      { success: true, result: {} }
+    end
+
+    client.evaluate(synapse_id: synapse.id)
+
+    expect(synapse.refresh.confidence).to be_within(0.0001).of(0.47)
+    expect(synapse.consecutive_successes).to eq(51)
+  end
+
+  it 'applies validation penalties to confidence committed while transforming' do
+    synapse.update(transform: '{"template":"bad"}')
+    allow(transformer).to receive(:transform) do
+      synapse.update(confidence: 0.4, consecutive_successes: 17)
+      { success: false, errors: ['invalid'] }
+    end
+
+    client.evaluate(synapse_id: synapse.id)
+
+    expect(synapse.refresh.confidence).to be_within(0.0001).of(0.37)
+    expect(synapse.consecutive_successes).to eq(0)
+  end
+
+  it 'applies pain to confidence committed after the initial synapse read' do
+    signal_model = Legion::Extensions::Synapse::Data::Model::SynapseSignal
+    allow(signal_model).to receive(:create).and_wrap_original do |create, **attributes|
+      synapse.update(confidence: 0.8, consecutive_successes: 12)
+      create.call(**attributes)
+    end
+
+    client.handle_pain(synapse_id: synapse.id)
+
+    expect(synapse.refresh.confidence).to be_within(0.0001).of(0.75)
+    expect(synapse.consecutive_successes).to eq(0)
+  end
+
+  it 'clamps persisted rewards and penalties at the confidence bounds' do
+    allow(Legion::Extensions::Synapse::Helpers::Proposals).to receive(:reactive?).and_return(false)
+    synapse.update(confidence: 0.99)
+    client.evaluate(synapse_id: synapse.id)
+    expect(synapse.refresh.confidence).to eq(1.0)
+
+    synapse.update(confidence: 0.01)
+    client.handle_pain(synapse_id: synapse.id)
+    expect(synapse.refresh.confidence).to eq(0.0)
+  end
 end
