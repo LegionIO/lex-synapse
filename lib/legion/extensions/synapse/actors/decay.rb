@@ -26,22 +26,20 @@ module Legion
             end
 
             model = Legion::Extensions::Synapse::Data::Model::Synapse
+            signals = Legion::Extensions::Synapse::Data::Model::SynapseSignal
             decayed = 0
-            model.where(status: 'active').select_map(:id).each do |synapse_id|
-              model.db.transaction do
-                synapse = model.where(id: synapse_id, status: 'active').for_update.first
-                next unless synapse
+            model.where(status: 'active').each do |synapse|
+              last_signal = signals.where(synapse_id: synapse.id).order(Sequel.desc(:created_at)).first&.created_at
+              idle_start = [synapse.created_at, last_signal, synapse.last_decay_at].compact.max
+              hours = ((now - idle_start) / 3600).floor
+              next unless hours.positive?
 
-                last_signal = Legion::Extensions::Synapse::Data::Model::SynapseSignal.where(synapse_id: synapse_id)
-                                                                                     .order(Sequel.desc(:created_at)).first&.created_at
-                idle_start = [synapse.created_at, last_signal, synapse.last_decay_at].compact.max
-                hours = ((now - idle_start) / 3600).floor
-                next unless hours.positive?
-
-                confidence = Legion::Extensions::Synapse::Helpers::Confidence.decay(synapse.confidence, hours: hours)
-                decayed += 1 if confidence != synapse.confidence
-                synapse.update(confidence: confidence, last_decay_at: idle_start + (hours * 3600))
-              end
+              factor = Legion::Extensions::Synapse::Helpers::Confidence::DECAY_RATE**hours
+              recent_activity = signals.where(synapse_id: synapse.id).where { created_at > idle_start }
+              changed = model.where(id: synapse.id, status: 'active', last_decay_at: synapse.last_decay_at)
+                             .exclude(recent_activity.exists)
+                             .update(confidence: Sequel[:confidence] * factor, last_decay_at: idle_start + (hours * 3600))
+              decayed += changed if synapse.confidence.positive?
             end
 
             { decayed: decayed }

@@ -74,14 +74,52 @@ RSpec.describe Legion::Extensions::Synapse::Actor::Decay do
     expect(synapse.refresh.confidence).to eq(0.8)
   end
 
-  it 'rolls back confidence when the checkpoint write fails' do
+  it 'applies decay to the latest confidence instead of overwriting a concurrent evaluation' do
     synapse
-    allow_any_instance_of(Legion::Extensions::Synapse::Data::Model::Synapse).to receive(:update).and_wrap_original do |method, attributes|
-      method.call(attributes)
-      raise Sequel::DatabaseError, 'checkpoint failure'
+    model = Legion::Extensions::Synapse::Data::Model::Synapse
+    allow(model).to receive(:where).and_call_original
+    allow(model).to receive(:where).with(id: synapse.id, status: 'active', last_decay_at: nil).and_wrap_original do |method, **conditions|
+      model.db[:synapses].where(id: synapse.id).update(confidence: 0.9)
+      method.call(**conditions)
     end
-    expect { actor.action(now: now) }.to raise_error(Sequel::DatabaseError)
+
+    expect(actor.action(now: now)).to eq(decayed: 1)
+    expect(synapse.refresh.confidence).to be_within(1e-10).of(0.9 * (0.998**5))
+  end
+
+  it 'does not repeat a competing tick that moved the checkpoint after the read' do
+    synapse
+    model = Legion::Extensions::Synapse::Data::Model::Synapse
+    allow(model).to receive(:where).and_call_original
+    allow(model).to receive(:where).with(id: synapse.id, status: 'active', last_decay_at: nil).and_wrap_original do |method, **conditions|
+      model.db[:synapses].where(id: synapse.id).update(confidence: 0.8 * (0.998**5), last_decay_at: now)
+      method.call(**conditions)
+    end
+
+    expect(actor.action(now: now)).to eq(decayed: 0)
+    expect(synapse.refresh.confidence).to be_within(1e-10).of(0.8 * (0.998**5))
+    expect(synapse.last_decay_at).to eq(now)
+  end
+
+  it 'skips decay when traffic arrives after reading the idle window' do
+    synapse
+    model = Legion::Extensions::Synapse::Data::Model::Synapse
+    allow(model).to receive(:where).and_call_original
+    allow(model).to receive(:where).with(id: synapse.id, status: 'active', last_decay_at: nil).and_wrap_original do |method, **conditions|
+      Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id, created_at: now)
+      method.call(**conditions)
+    end
+
+    expect(actor.action(now: now)).to eq(decayed: 0)
     expect(synapse.refresh.confidence).to eq(0.8)
     expect(synapse.last_decay_at).to be_nil
+  end
+
+  it 'does not charge idle time before an upgrade checkpoint' do
+    synapse.update(created_at: now - (30 * 86_400), last_decay_at: now)
+    expect(actor.action(now: now)).to eq(decayed: 0)
+    expect(synapse.refresh.confidence).to eq(0.8)
+    expect(actor.action(now: now + 3600)).to eq(decayed: 1)
+    expect(synapse.refresh.confidence).to be_within(1e-10).of(0.8 * 0.998)
   end
 end

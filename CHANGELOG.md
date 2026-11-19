@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.27] - 2026-11-19
+### Fixed
+- Start existing decay checkpoints at upgrade time and use conditional SQL multiplication without explicit locks, preserving concurrent confidence updates and newly arrived traffic (fixes #28).
+
 ## [0.4.26] - 2026-11-19
 ### Fixed
 - Recover observe-mode confidence from confirmed downstream successes once, preserve evaluation credit provenance, and update confidence/streaks atomically in SQL; keep failure outcome handling outside a broad transaction (fixes #15, fixes #16).
