@@ -53,10 +53,11 @@ module Legion
             end
 
             # Step 3: Record signal
-            signal_record = record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)
+            signal_record = record_signal(synapse, attention_result[:observed_passed], transform_result[:success], elapsed)
 
-            # Step 4: Adjust confidence (skip if run_transform already penalized for validation failure)
-            new_confidence = adjust_evaluation_confidence(synapse: synapse, transform_result: transform_result)
+            # Step 4: Observation and correct filtering are neutral; transform failures are penalized once.
+            new_confidence = adjust_evaluation_confidence(synapse: synapse, transform_result: transform_result,
+                                                          mode: mode, attention_result: attention_result)
 
             # Step 5: Generate proposals if autonomous
             if (proposal_eligible || Helpers::Confidence.can_self_modify?(new_confidence)) && Helpers::Proposals.reactive?
@@ -80,7 +81,8 @@ module Legion
 
           private
 
-          def adjust_evaluation_confidence(synapse:, transform_result:)
+          def adjust_evaluation_confidence(synapse:, transform_result:, mode:, attention_result:)
+            return synapse.confidence if mode == :observe || !attention_result[:passed]
             return synapse.confidence if transform_result[:validation_failure]
 
             event = transform_result[:success] ? :success : :failure
@@ -93,16 +95,12 @@ module Legion
           end
 
           def check_attention(synapse, payload, mode, conditioner_client)
-            return { passed: true } if synapse.attention.nil? || synapse.attention.empty?
+            return { passed: true, observed_passed: true } if synapse.attention.nil? || synapse.attention.empty?
             return { passed: mode == :observe, unavailable: true, error: 'conditioner unavailable' } unless conditioner_client.respond_to?(:evaluate)
 
             result = conditioner_client.evaluate(conditions: Legion::JSON.load(synapse.attention), values: payload)
-            passed = result[:valid]
-
-            # In OBSERVE mode, always pass through regardless of result
-            passed = true if mode == :observe
-
-            { passed: passed }
+            # Preserve the measured verdict even when observe mode permits pass-through.
+            { passed: mode == :observe || result[:valid], observed_passed: result[:valid] }
           end
 
           def run_transform(synapse, payload, transformer_client)

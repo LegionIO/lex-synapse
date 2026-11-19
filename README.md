@@ -74,7 +74,9 @@ Each synapse has a confidence score (0.0-1.0) that governs what it's allowed to 
 
 **Starting scores**: explicit=0.7, emergent=0.3, seeded=0.5
 
-**Adjustments**: success +0.02, failure -0.05, validation failure -0.03, more than 50 consecutive successful evaluations +0.05 bonus (streak persisted; failures reset it)
+Observe-mode pass-through and clean attention rejections are neutral: they neither change confidence nor advance/reset the success streak. Signals retain the conditioner verdict even when observe mode passes the payload through.
+
+**Adjustments**: eligible evaluation success +0.02, failure -0.05, validation failure -0.03, more than 50 consecutive successful evaluations +0.05 bonus (streak persisted; failures reset it)
 
 **Decay**: Unused synapses fade at 0.998x per hour (~4.7% per day of inactivity; half-life ~14.4 days)
 

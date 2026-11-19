@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.20] - 2026-11-19
+### Fixed
+- Keep observe-mode pass-through and clean attention rejections neutral for confidence and learning streaks; record the actual observed attention verdict (fixes #15).
+
 ## [0.4.19] - 2026-11-19
 ### Fixed
 - Use non-overlapping autonomy ranges so mode labels match filtering, transformation, and self-modification at their inclusive lower thresholds (fixes #26).

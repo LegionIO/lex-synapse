@@ -151,6 +151,39 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Evaluate do
       end
     end
 
+    context 'with neutral routing evidence' do
+      it 'records the would-be rejection in observe mode without rewarding pass-through' do
+        synapse.update(confidence: 0.1, attention: '{"field":"value"}', consecutive_successes: 7)
+        allow(conditioner_client).to receive(:evaluate).and_return(valid: false, explanation: {})
+        20.times do
+          result = evaluator.evaluate(synapse_id: synapse.id, conditioner_client: conditioner_client)
+          expect(result).to include(success: true, passed: true, mode: :observe)
+        end
+        expect(synapse.reload.confidence).to eq(0.1)
+        expect(synapse.consecutive_successes).to eq(7)
+        expect(synapse.signals_dataset.select_map(:passed_attention)).to all(be false)
+      end
+
+      it 'does not promote an observing synapse with no attention rule' do
+        synapse.update(confidence: 0.1)
+        20.times { evaluator.evaluate(synapse_id: synapse.id) }
+        expect(synapse.reload.confidence).to eq(0.1)
+        expect(synapse.consecutive_successes).to eq(0)
+      end
+
+      [0.3, 0.5, 0.7, 0.85].each do |confidence|
+        it "does not penalize clean attention rejection at confidence #{confidence}" do
+          synapse.update(confidence: confidence, attention: '{"field":"value"}', consecutive_successes: 7)
+          allow(conditioner_client).to receive(:evaluate).and_return(valid: false, explanation: {})
+          result = evaluator.evaluate(synapse_id: synapse.id, conditioner_client: conditioner_client)
+          expect(result[:passed]).to be false
+          expect(synapse.reload.confidence).to eq(confidence)
+          expect(synapse.consecutive_successes).to eq(7)
+          expect(synapse.signals_dataset.first.passed_attention).to be false
+        end
+      end
+    end
+
     context 'with transform and transformer client' do
       before do
         synapse.update(confidence: 0.7, transform: '{"template":"hello"}')
