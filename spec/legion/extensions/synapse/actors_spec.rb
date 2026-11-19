@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'open3'
 
 require 'legion/extensions/synapse/actors/evaluate'
 require 'legion/extensions/synapse/actors/pain'
@@ -47,6 +48,44 @@ RSpec.describe 'Synapse Actors' do
       it 'returns empty results when no active synapses exist' do
         result = actor.action
         expect(result).to include(spikes: 0, droughts: 0, updated: 0)
+      end
+
+      it 'initializes both lazy models on the first action in a fresh process' do
+        script = <<~RUBY
+          require 'sequel'
+          require 'legion/settings'
+          module Legion
+            module Data; end
+            module Settings
+              def self.dig(*) = true
+            end
+            module Extensions
+              module Actors
+                class Every; end
+              end
+            end
+          end
+          db = Sequel.sqlite
+          Sequel.extension :migration
+          Sequel::Migrator.run(db, 'lib/legion/extensions/synapse/data/migrations')
+          Sequel::Model.db = db
+          db[:synapses].insert(status: 'active', baseline_throughput: 10.0)
+          require 'legion/extensions/synapse/helpers/homeostasis'
+          require 'legion/extensions/synapse/actors/homeostasis'
+          models = Legion::Extensions::Synapse::Data::Model
+          abort 'model initialized too early' if models.const_defined?(:Synapse, false)
+          result = Legion::Extensions::Synapse::Actor::Homeostasis.allocate.action
+          abort result.inspect unless result[:updated] == 1 && result[:droughts] == 1
+          abort 'baseline not updated' unless db[:synapses].get(:baseline_throughput) == 9.0
+        RUBY
+        stdout, stderr, status = Open3.capture3(RbConfig.ruby, '-Ilib', '-e', script)
+        expect(status.success?).to be(true), "#{stdout}#{stderr}"
+      end
+
+      it 'reports unavailable data when lazy model initialization cannot run' do
+        hide_const('Legion::Extensions::Synapse::Data::Model::SynapseSignal')
+        allow(Legion::Settings).to receive(:dig).with(:data, :connected).and_return(false)
+        expect(actor.action).to eq(status: :skipped, reason: :no_data)
       end
 
       context 'with one active synapse and no recent signals' do

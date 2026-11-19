@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+
 module Legion
   module Extensions
     module Synapse
@@ -14,8 +17,14 @@ module Legion
           def action(**)
             return { status: :skipped, reason: :no_data } unless defined?(Legion::Data)
 
+            Legion::Extensions::Synapse::Data::Model.define_synapse_model
+            Legion::Extensions::Synapse::Data::Model.define_synapse_signal_model
+            unless defined?(Legion::Extensions::Synapse::Data::Model::Synapse) &&
+                   defined?(Legion::Extensions::Synapse::Data::Model::SynapseSignal)
+              return { status: :skipped, reason: :no_data }
+            end
+
             results = { spikes: 0, droughts: 0, updated: 0 }
-            return results unless defined?(Legion::Extensions::Synapse::Data::Model::Synapse)
 
             cutoff = Time.now - 60
             window_seconds = 60.0
