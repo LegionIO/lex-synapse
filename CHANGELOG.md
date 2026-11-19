@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.25] - 2026-11-19
+### Fixed
+- Align README and agent notes with callable client/runner APIs, mutation-history simulation, automatic proposal review/application, and current tasker/Apollo integration limits (fixes #31).
+
 ## [0.4.24] - 2026-11-19
 ### Fixed
 - Forward the injected reviewer through standalone client challenge cycles and initialize signals before application-time review checks (fixes #27).

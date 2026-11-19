@@ -10,7 +10,7 @@ Cognitive routing layer that wraps task chain relationships with observation, le
 
 **GitHub**: https://github.com/LegionIO/lex-synapse
 **License**: MIT
-**Version**: 0.4.11
+**Version**: see `lib/legion/extensions/synapse/version.rb`
 
 ## Architecture
 
@@ -31,10 +31,10 @@ Legion::Extensions::Synapse
 │   ├── Mutate          # versioned self-modification with before/after snapshots
 │   ├── Revert          # rollback to previous mutation version (restores before_state)
 │   ├── Report          # aggregate stats for GAIA consumption
-│   ├── Dream           # replay historical signals in simulation mode
-│   ├── GaiaReport      # GAIA tick hook: report confidence and health per synapse
-│   ├── Promote         # Apollo integration: promote high-confidence synapse patterns
-│   ├── Retrieve        # Apollo integration: retrieve relevant synapse patterns
+│   ├── Dream           # mutation-history inspection and copied-state simulation
+│   ├── GaiaReport      # aggregate confidence and health summaries for GAIA callers
+│   ├── Promote         # prepare high-confidence synapse knowledge entries
+│   ├── Retrieve        # seed synapses from caller-supplied knowledge entries
 │   ├── Propose         # reactive (signal-driven) + proactive (periodic) proposal generation
 │   └── Challenge       # conflict detection, LLM challenge, weighted aggregation, outcome resolution
 ├── Helpers/
@@ -43,7 +43,7 @@ Legion::Extensions::Synapse
 │   ├── RelationshipWrapper  # Layer 1 -> Layer 2 wrapping
 │   └── Challenge       # settings, constants, impact threshold helpers
 ├── Data/
-│   ├── Migrations/     # 001 synapses, 002 mutations, 003 signals, 004 proposals, 005 challenges, 006 slow_query_indexes, 007 blast_radius
+│   ├── Migrations/     # 001 synapses, 002 mutations, 003 signals, 004 proposals, 005 challenges, 006 slow_query_indexes, 007 blast_radius, 008 consecutive_successes, 009 task targets, 010 last_decay_at
 │   └── Models/         # Synapse, SynapseMutation, SynapseSignal, SynapseProposal, SynapseChallenge
 ├── Transport/
 │   ├── Exchanges/Synapse
@@ -54,21 +54,30 @@ Legion::Extensions::Synapse
 
 ## Runner Methods (Public API)
 
-| Runner | Method | Signature |
+The standalone `Client` includes these runners. `Client#evaluate(synapse_id:, payload: {})` injects the clients supplied at construction. The runner itself accepts `evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil, **)`.
+
+| Area | Callable signature | Behavior |
 |---|---|---|
-| Evaluate | `evaluate` | `evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil)` |
-| Pain | `handle_pain` | `handle_pain(synapse_id:, task_id: nil)` — records failure, adjusts confidence, calls `revert` on 3+ consecutive failures |
-| Crystallize | `crystallize` | `crystallize(signal_pairs:, threshold: 20)` |
-| Mutate | `mutate` | `mutate(synapse_id:, mutation_type:, changes:, trigger:)` |
-| Revert | `revert` | `revert(synapse_id:, to_version: nil, trigger: 'pain')` — restores `before_state` from mutation record; records revert as new mutation |
-| Report | `report` | `report(synapse_id:)` |
-| Dream | `dream` | `dream(synapse_id:, limit:)` |
-| GaiaReport | `gaia_report` | Called during GAIA tick cycle |
-| Promote | `promote` | `promote(synapse_id:)` |
-| Retrieve | `retrieve` | `retrieve(...)` |
-| Propose | `propose`, `proposals`, `review_proposal` | `propose(synapse_id:, ...)` / `proposals(synapse_id:, status:)` / `review_proposal(proposal_id:, status:)` |
-| Challenge | `challenge_proposal`, `challenges`, `challenger_stats` | `challenge_proposal(proposal_id:)` / `challenges(proposal_id:)` / `challenger_stats` |
-| Blast Radius | `analyze_routing` | `analyze_routing(synapse_id:)` — logs blast radius analysis result |
+| Pain | `handle_pain(synapse_id:, task_id: nil, signal_id: nil, **)` | Correlates failure when a signal ID is supplied; otherwise inserts a legacy failure record |
+| Crystallize | `crystallize(signal_pairs: [], threshold: 20)` | Creates emergent synapses from supplied pairs; the default empty input discovers nothing |
+| Mutate | `mutate(synapse_id:, mutation_type:, changes:, trigger:)` | Writes routing state and mutation history transactionally |
+| Revert | `revert(synapse_id:, to_version: nil, trigger: 'pain')` | Restores the selected mutation's before-state and records a new history entry |
+| Report | `report(synapse_id:, **)` | Reports evaluation counts separately from completed downstream outcomes |
+| Dream | `dream_replay(synapse_id: nil, **)` | Returns mutation-history metadata, not replayed payloads |
+| Dream | `dream_simulate(synapse_id:, mutation_type:, changes:, **)` | Copies state and estimates confidence by assuming one success; does not run historical payloads or write routing state |
+| GAIA | `gaia_summary(**)`, `gaia_reflection(**)` | Returns aggregate health and recent mutation summaries for a caller to consume |
+| Promote | `promote(synapse_id: nil, **)` | Returns candidate knowledge entries; does not publish to Apollo |
+| Retrieve | `retrieve_and_seed(knowledge_entries:, **)` | Seeds from caller-supplied knowledge; does not query Apollo |
+| Propose | `propose_reactive(synapse:, payload:, signal_id:, attention_result:, transform_result:, transformer_client: nil)` | Generates proposals from supplied evaluation evidence |
+| Propose | `propose_proactive` | Analyzes stored signals for eligible active synapses |
+| Client review | `proposals(synapse_id:, status: nil)`, `review_proposal(proposal_id:, status:)` | Lists proposals or records an explicit review status |
+| Challenge | `challenge_proposal(proposal_id:, transformer_client: @transformer_client, **)` | Client defaults to its injected reviewer; runner default is nil |
+| Challenge | `run_challenge_cycle(transformer_client: @transformer_client, **)` | Client defaults to its injected reviewer; runner default is nil; challenges, applies auto-accepted proposals, then resolves outcomes |
+| Challenge | `apply_proposal(proposal_id:, **)`, `resolve_challenge_outcomes(proposal_id:)` | Applies approved/auto-accepted proposals or resolves their challenger outcomes |
+| Challenge queries | `pending_challenges`, `challenges(proposal_id:)`, `challenger_stats` | Returns pending/deferred work, review records, or resolved challenger statistics |
+| Blast radius | `compute(**)`, `blast_tier(synapse_id:)` | Recomputes graph-derived blast tiers or returns one stored tier |
+
+`analyze_routing` is a private proposal-analysis stub, not the blast-radius API. See the README for review prerequisites and integration limits.
 
 ## Key Thresholds
 
@@ -91,37 +100,37 @@ Legion::Extensions::Synapse
 
 | Confidence | Mode | Capabilities |
 |------------|------|-------------|
-| 0.0-0.3 | OBSERVE | Log, pass through unchanged |
-| 0.3-0.6 | FILTER | Suppress signals |
-| 0.6-0.8 | TRANSFORM | Filter + transform within schemas |
-| 0.8-1.0 | AUTONOMOUS | Self-modify rules via proposals, infer transforms |
+| 0.0 <= confidence < 0.3 | OBSERVE | Log, pass through unchanged |
+| 0.3 <= confidence < 0.6 | FILTER | Suppress signals |
+| 0.6 <= confidence < 0.8 | TRANSFORM | Filter + transform within schemas |
+| 0.8 <= confidence <= 1.0 | AUTONOMOUS | Self-modify rules via proposals, infer transforms |
 
 ## Pain Auto-Revert
 
-`Runners::Pain#handle_pain` calls `revert(synapse_id:, trigger: 'pain')` directly when `consecutive_failures >= 3`. The revert finds the latest mutation record for the synapse's current version, restores `before_state` (attention, transform, routing_strategy, confidence, status), decrements version, marks the mutation outcome as `'reverted'`, and creates a new mutation record with `outcome: 'reverted'`.
+`Runners::Pain#handle_pain` calls `revert(synapse_id:, trigger: 'pain')` directly when `consecutive_failures >= 3`. The revert finds the latest mutation record for the synapse's current version, restores `before_state` (attention, transform, routing_strategy, confidence, status), restores the saved live version, marks the mutation outcome as `'reverted'`, and creates a new uniquely versioned history record with `outcome: 'reverted'`.
 
 ## Data Model
 
-- **synapses**: Core routing definition with confidence, status, version, baseline_throughput, blast_radius
+- **synapses**: Core routing definition with confidence, status, version, baseline_throughput, blast_radius, consecutive_successes, last_decay_at
 - **synapse_mutations**: Versioned change history with before/after JSON snapshots, trigger, outcome
-- **synapse_signals**: Per-signal outcome records (attention pass, transform success, latency_ms, downstream outcome)
+- **synapse_signals**: Per-signal outcome records (observed attention verdict, evaluation success, latency_ms, correlated task/target, downstream outcome)
 - **synapse_proposals**: Proposed changes with status lifecycle (pending → approved/rejected/applied/expired/auto_accepted/auto_rejected), challenge_state, challenge_score, impact_score
 - **synapse_challenges**: Per-challenge verdicts (conflict/LLM), confidence tracking, outcome resolution
 
-## Autonomous Observation Mode (v0.3.0)
+## Autonomous Proposal Application
 
-AUTONOMOUS-tier synapses (confidence >= 0.8) generate proposals instead of executing autonomous actions. Proposals are reactive (triggered on signal evaluation in `Runners::Evaluate`) or proactive (generated periodically by `Actors::Propose`). Settings: `lex-synapse.proposals.*` (enabled, reactive, proactive, max_per_run, llm_engine_options, thresholds).
+AUTONOMOUS-tier synapses generate reactive or proactive proposals. `run_challenge_cycle` automatically applies auto-accepted proposals through the mutation runner; this is not observation-only operation. Explicitly approved proposals can be applied with `apply_proposal`. Settings: `lex-synapse.proposals.*`.
 
-## Adversarial Challenge Phase (v0.4.0)
+## Adversarial Challenge Phase
 
-Pending proposals pass through: conflict detection → impact scoring → LLM challenge (gated by `impact_score >= 0.3`) → weighted aggregation → auto-accept/reject. Aggregation: `support_weight / (support_weight + challenge_weight)`, >= 0.85 auto-accepts, <= 0.15 auto-rejects. Settings: `lex-synapse.challenge.*`.
+Impact scoring determines whether LLM review is required: impact >= the configured threshold (default 0.3) or HIGH/CRITICAL blast radius. Missing reviewers, errors, malformed responses, and abstentions leave a proposal pending with `challenge_state: deferred`. Deferred proposals remain retryable. After completed review, conflict detection and weighted aggregation determine the decision: support weight / total weight, >= 0.85 auto-accepts and <= 0.15 auto-rejects by default. Lower-impact proposals retain conflict-only decisions. The scheduled actor has no default reviewer and reports deferred counts; the standalone client uses its injected reviewer. Settings: `lex-synapse.challenge.*`.
 
-## GAIA / Apollo Integration (v0.2.2)
+## GAIA / Apollo Integration
 
-- **GaiaReport**: Called during GAIA tick to report per-synapse confidence and health metrics
-- **Dream**: Replays historical signals in simulation without affecting live state
-- **Promote**: Publishes high-confidence patterns to Apollo shared knowledge store
-- **Retrieve**: Pulls relevant patterns from Apollo to seed new synapses or adjust confidence
+- `gaia_summary` and `gaia_reflection` return health and mutation summaries for callers.
+- `dream_replay` inspects mutation history. `dream_simulate` changes a copied state and assumes a success adjustment; neither executes historical payloads or proves routing quality.
+- `promote` prepares knowledge entries, and `retrieve_and_seed` consumes supplied entries. Apollo network publication/retrieval remains tracked in [#30](https://github.com/LegionIO/lex-synapse/issues/30).
+- Task-chain dispatch requires the lex-tasker companion tracked in [#18](https://github.com/LegionIO/lex-synapse/issues/18).
 
 ## Dependencies
 
@@ -141,8 +150,8 @@ Pending proposals pass through: conflict detection → impact scoring → LLM ch
 
 ```bash
 bundle install
-bundle exec rspec     # 412 specs, 0 failures
-bundle exec rubocop   # 0 offenses
+bundle exec rspec --format json --out tmp/rspec_results.json --format progress --out tmp/rspec_progress.txt
+bundle exec rubocop -A
 ```
 
 Uses in-memory SQLite for model/runner tests.
