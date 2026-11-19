@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.24] - 2026-11-19
+### Fixed
+- Forward the injected reviewer through standalone client challenge cycles and initialize signals before application-time review checks (fixes #27).
+
 ## [0.4.23] - 2026-11-19
 ### Fixed
 - Decay only complete idle hours since the latest activity, persisting a transactional checkpoint to prevent duplicate decay across retries and restarts (fixes #28).

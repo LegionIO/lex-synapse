@@ -47,6 +47,24 @@ RSpec.describe 'Synapse::Client challenge methods' do
     end
   end
 
+  describe '#run_challenge_cycle' do
+    before do
+      synapse.update(blast_radius: 'HIGH')
+      proposal.update(output: '{"template":"reviewed"}')
+    end
+
+    it 'defers required review through the standalone client without a reviewer' do
+      expect(client.run_challenge_cycle).to include(deferred: 1, applied: 0)
+    end
+
+    it 'uses the injected reviewer through the complete standalone client cycle' do
+      reviewer = double('reviewer', transform: { success: true, result: 'VERDICT: SUPPORT' })
+      reviewed_client = Legion::Extensions::Synapse::Client.new(transformer_client: reviewer)
+      expect(reviewed_client.run_challenge_cycle).to include(deferred: 0, applied: 1)
+      expect(synapse.refresh.transform).to eq(proposal.output)
+    end
+  end
+
   describe '#challenges' do
     it 'returns challenge records for a proposal' do
       client.challenge_proposal(proposal_id: proposal.id)

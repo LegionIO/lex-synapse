@@ -94,6 +94,7 @@ module Legion
           end
 
           def apply_proposal(proposal_id:, **)
+            Data::Model.define_synapse_signal_model
             Data::Model.define_synapse_challenge_model
             Data::Model.define_synapse_proposal_model
             Data::Model.define_synapse_model

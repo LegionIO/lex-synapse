@@ -84,8 +84,12 @@ module Legion
           { success: true, proposal_id: proposal_id, status: status }
         end
 
-        def challenge_proposal(proposal_id:)
-          super(proposal_id: proposal_id, transformer_client: @transformer_client)
+        def challenge_proposal(proposal_id:, transformer_client: @transformer_client, **)
+          super(proposal_id: proposal_id, transformer_client: transformer_client)
+        end
+
+        def run_challenge_cycle(transformer_client: @transformer_client, **)
+          super(transformer_client: transformer_client)
         end
 
         def challenges(proposal_id:)
