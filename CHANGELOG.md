@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.21] - 2026-11-19
+### Fixed
+- Calculate downstream success rate from completed outcomes only, expose unresolved and evaluation counts, and verify duplicate-safe task outcome correlation (fixes #25).
+
 ## [0.4.20] - 2026-11-19
 ### Fixed
 - Keep observe-mode pass-through and clean attention rejections neutral for confidence and learning streaks; record the actual observed attention verdict (fixes #15).

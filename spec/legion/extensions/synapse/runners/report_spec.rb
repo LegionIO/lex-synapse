@@ -108,6 +108,39 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Report do
       end
     end
 
+    context 'with unresolved and completed outcomes' do
+      it 'excludes unknown outcomes from the completion denominator' do
+        %w[success success failed].each do |outcome|
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+            synapse_id: synapse.id, downstream_outcome: outcome, transform_success: true
+          )
+        end
+        5.times do
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+            synapse_id: synapse.id, transform_success: true
+          )
+        end
+        Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+          synapse_id: synapse.id, downstream_outcome: 'failed', created_at: Time.now - 90_000
+        )
+        expect(reporter.report(synapse_id: synapse.id)).to include(
+          signals_24h: 8, total_signals: 9, success_rate: 0.6667,
+          completed_outcomes_24h: 3, successful_outcomes_24h: 2, failed_outcomes_24h: 1,
+          unresolved_signals_24h: 5, evaluation_successes_24h: 8
+        )
+      end
+
+      it 'distinguishes successful evaluation from downstream completion' do
+        Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+          synapse_id: synapse.id, transform_success: true
+        )
+        expect(reporter.report(synapse_id: synapse.id)).to include(
+          success_rate: 0.0, completed_outcomes_24h: 0, failed_outcomes_24h: 0,
+          unresolved_signals_24h: 1, evaluation_successes_24h: 1
+        )
+      end
+    end
+
     context 'with a mutation' do
       before do
         Legion::Extensions::Synapse::Data::Model::SynapseMutation.create(

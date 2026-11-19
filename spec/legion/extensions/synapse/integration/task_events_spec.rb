@@ -58,6 +58,21 @@ RSpec.describe Legion::Extensions::Synapse::Integration do
     expect(client.report(synapse_id: synapse.id)[:success_rate]).to eq(1.0)
   end
 
+  it 'reports correlated outcomes once while leaving undispatched evaluations unresolved' do
+    client.evaluate(synapse_id: synapse.id)
+    %i[success failed].each_with_index do |outcome, task_id|
+      evaluation = client.evaluate(synapse_id: synapse.id)
+      described_class.attach_task(signal_id: evaluation[:signal_id], task_id: task_id, runner_class: 'Example::Target', function: 'consume')
+      2.times do
+        described_class.record_outcome(task_id: task_id, outcome: outcome, runner_class: 'Example::Target', function: 'consume')
+      end
+    end
+    expect(client.report(synapse_id: synapse.id)).to include(
+      signals_24h: 3, completed_outcomes_24h: 2, successful_outcomes_24h: 1,
+      failed_outcomes_24h: 1, unresolved_signals_24h: 1, evaluation_successes_24h: 3, success_rate: 0.5
+    )
+  end
+
   it 'ignores intermediate stage completion sharing the target task ID' do
     evaluation = client.evaluate(synapse_id: synapse.id)
     described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 456, runner_class: 'Example::Target', function: 'consume')

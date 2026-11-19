@@ -179,3 +179,9 @@ Five tables: `synapses` (core routing + confidence + status + blast_radius), `sy
 ## License
 
 MIT
+
+### Outcome reporting
+
+`report(synapse_id:)` measures the last 24 hours by signal creation time. `success_rate` is successful downstream outcomes divided by completed outcomes (`success` plus `failed`), and is 0.0 when none are complete. `completed_outcomes_24h`, `successful_outcomes_24h`, and `failed_outcomes_24h` expose that denominator. `unresolved_signals_24h` includes pending tasks and evaluations that never dispatch; these do not count as completed failures. `evaluation_successes_24h` counts successful evaluation/pass-through records and is not proof of downstream completion or transformation execution.
+
+`Integration.attach_task` associates an evaluation signal with its downstream task and target runner/function. `Integration.record_outcome` and the installed host task event listeners finalize that same signal once; duplicate or conflicting completion notifications do not create another attempt. Live task-chain attachment depends on the lex-tasker companion tracked in [#18](https://github.com/LegionIO/lex-synapse/issues/18).
