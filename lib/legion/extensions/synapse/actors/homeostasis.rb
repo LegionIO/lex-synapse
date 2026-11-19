@@ -36,9 +36,8 @@ module Legion
                                         .group_and_count(:synapse_id)
                                         .as_hash(:synapse_id, :count)
 
-            # Fetch only active synapses with a nonzero baseline — eager-load to avoid N+1
+            # Include new zero baselines so the first traffic window can initialize the EWMA
             active_synapses = synapse_model.where(status: 'active')
-                                           .where { baseline_throughput > 0 } # rubocop:disable Style/NumericPredicate
                                            .all
             return results if active_synapses.empty?
 

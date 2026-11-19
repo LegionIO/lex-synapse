@@ -157,6 +157,39 @@ RSpec.describe 'Synapse Actors' do
         end
       end
 
+      context 'with a new active synapse' do
+        let!(:synapse) { Legion::Extensions::Synapse::Data::Model::Synapse.create(status: 'active') }
+
+        it 'keeps a silent zero baseline without reporting an anomaly' do
+          expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(0.0)
+        end
+
+        it 'bootstraps from traffic and detects a spike in the next window' do
+          10.times do
+            Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+              synapse_id: synapse.id, created_at: Time.now
+            )
+          end
+          expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(1.0)
+          expect(actor.action).to eq(spikes: 1, droughts: 0, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(1.9)
+        end
+
+        it 'can detect a drought after bootstrapping a sufficiently busy baseline' do
+          100.times do
+            Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+              synapse_id: synapse.id, created_at: Time.now
+            )
+          end
+          expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 1)
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.dataset.update(created_at: Time.now - 120)
+          expect(actor.action).to eq(spikes: 0, droughts: 1, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(9.0)
+        end
+      end
+
       context 'with an inactive synapse' do
         let!(:inactive) do
           Legion::Extensions::Synapse::Data::Model::Synapse.create(

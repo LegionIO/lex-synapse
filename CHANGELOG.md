@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.18] - 2026-11-19
+### Fixed
+- Bootstrap zero throughput baselines from observed traffic without classifying the initial window as an anomaly; preserve batched homeostasis queries (fixes #24).
+
 ## [0.4.17] - 2026-11-19
 ### Fixed
 - Initialize both homeostasis models on its first tick and report unavailable data explicitly (fixes #20).
