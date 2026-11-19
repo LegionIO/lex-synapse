@@ -24,7 +24,7 @@ module Legion
             successful = recent_signals.where(downstream_outcome: 'success').count
             failed = recent_signals.where(downstream_outcome: 'failed').count
             completed = successful + failed
-            success_rate = completed.positive? ? (successful.to_f / completed).round(4) : 0.0
+            success_rate = completed.positive? ? (successful.to_f / completed).round(4) : nil
 
             last_mutation = synapse.mutations_dataset.order(Sequel.desc(:id)).first
 

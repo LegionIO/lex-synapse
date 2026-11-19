@@ -33,7 +33,7 @@ report = client.report(synapse_id: synapse.id)
 report[:confidence]              # => 0.72
 report[:signals_24h]             # => 1
 report[:completed_outcomes_24h]  # => 0
-report[:success_rate]            # => 0.0 (downstream completion is unknown)
+report[:success_rate]            # => nil (downstream completion is unknown)
 ```
 
 For configured rules, require `legion/extensions/conditioner/client` and `legion/extensions/transformer/client`, then inject `conditioner_client:` and `transformer_client:` into `Client.new`. `Client#evaluate` uses those injected clients. A successful evaluation is separate from downstream task completion.
@@ -61,7 +61,7 @@ Each synapse has a confidence score (0.0-1.0) that governs what it's allowed to 
 
 **Starting scores**: explicit=0.7, emergent=0.3, seeded=0.5
 
-Observe-mode pass-through and clean attention rejections are neutral: they neither change confidence nor advance/reset the success streak. Signals retain the conditioner verdict even when observe mode passes the payload through.
+Observe-mode pass-through and clean attention rejections are neutral: they neither change confidence nor advance/reset the success streak. Signals retain the conditioner verdict even when observe mode passes the payload through. A confirmed downstream success credits an observe evaluation once (+0.02 and its success-streak increment), so an observing synapse can recover; eligible evaluations already credited at evaluation time are never credited again.
 
 **Adjustments**: eligible evaluation success +0.02, failure -0.05, validation failure -0.03, more than 50 consecutive successful evaluations +0.05 bonus (streak persisted; failures reset it)
 
@@ -171,17 +171,17 @@ Five tables: `synapses` (core routing + confidence + status + blast_radius), `sy
 
 ### Outcome reporting
 
-`report(synapse_id:)` measures the last 24 hours by signal creation time. `success_rate` is successful downstream outcomes divided by completed outcomes (`success` plus `failed`), and is 0.0 when none are complete. `completed_outcomes_24h`, `successful_outcomes_24h`, and `failed_outcomes_24h` expose that denominator. `unresolved_signals_24h` includes pending tasks and evaluations that never dispatch; these do not count as completed failures. `evaluation_successes_24h` counts successful evaluation/pass-through records and is not proof of downstream completion or transformation execution.
+`report(synapse_id:)` measures the last 24 hours by signal creation time. `success_rate` is successful downstream outcomes divided by completed outcomes (`success` plus `failed`), and is `nil` when none are complete. `completed_outcomes_24h`, `successful_outcomes_24h`, and `failed_outcomes_24h` expose that denominator. `unresolved_signals_24h` includes pending tasks and evaluations that never dispatch; these do not count as completed failures. `evaluation_successes_24h` counts successful evaluation/pass-through records and is not proof of downstream completion or transformation execution.
 
 `Integration.attach_task` associates an evaluation signal with its downstream task and target runner/function. `Integration.record_outcome` and the installed host task event listeners finalize that same signal once; duplicate or conflicting completion notifications do not create another attempt. Live task-chain attachment depends on the lex-tasker companion tracked in [#18](https://github.com/LegionIO/lex-synapse/issues/18).
 
 ### Required proposal review
 
-The challenge cycle automatically applies auto-accepted proposals. HIGH/CRITICAL blast radius or impact at/above the configured threshold requires a completed LLM review before automatic acceptance/application. Missing reviewers, errors, malformed responses, and abstentions leave the proposal pending with `challenge_state: deferred`; the cycle reports a `deferred` count and retries deferred proposals on later runs. Supply `transformer_client:` to complete required reviews; the scheduled actor currently has no default reviewer and therefore reports these deferrals. Lower-impact proposals retain conflict-based automatic decisions. Explicit operator approval remains a separate application path.
+The challenge cycle automatically applies auto-accepted proposals. HIGH/CRITICAL blast radius or impact at/above the configured threshold requires a completed LLM review before automatic acceptance/application. Missing reviewers, errors, malformed responses, and abstentions leave the proposal pending with `challenge_state: deferred`; the cycle reports a `deferred` count. The scheduled actor constructs a transformer client and requests a JSON verdict; standalone clients use their injected reviewer. New proposals have priority over due retries. Incomplete or unavailable reviews use persisted exponential backoff (300 seconds initially, capped at 3600) and expire after three attempts. Configure `review_retry_seconds`, `review_max_retry_seconds`, and `review_max_attempts` under `lex-synapse.challenge`. Explicit operator approval can still reopen an expired proposal. Lower-impact proposals retain conflict-based automatic decisions. Explicit operator approval remains a separate application path.
 
 ### Idle decay timing
 
-Only active synapses with at least one complete hour since their most recent signal are eligible for idle decay. The actor applies `0.998 ** elapsed_whole_hours`, measuring from the latest of creation time, last signal, and the persisted `last_decay_at` checkpoint. A recent signal resets the idle interval. Fractional hours remain for the next tick. A delayed tick or restart catches up the current idle interval; repeated ticks do not apply the same hours twice. Confidence and the checkpoint are committed together under a synapse row lock. Existing rows start from their creation/latest signal timestamps when no checkpoint exists.
+Only active synapses with at least one complete hour since their most recent signal are eligible for idle decay. The actor applies `0.998 ** elapsed_whole_hours`, measuring from the latest of creation time, last signal, and the persisted `last_decay_at` checkpoint. A recent signal resets the idle interval. Fractional hours remain for the next tick. A delayed tick or restart catches up the current idle interval; repeated ticks do not apply the same hours twice. Confidence is multiplied in SQL and the checkpoint advances in the same conditional update, without an explicit row lock. Changed checkpoints and newly arrived signals prevent stale ticks from writing. Existing rows receive the upgrade timestamp as their initial checkpoint so pre-upgrade idle hours are not charged twice.
 
 ## License
 

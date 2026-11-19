@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.30] - 2026-11-19
+### Fixed
+- Report unknown downstream success rates as nil when no outcomes are complete; document reviewed recovery, retry, and decay behavior (fixes #25).
+
 ## [0.4.29] - 2026-11-19
 ### Fixed
 - Seed zero throughput baselines from the full first traffic window and avoid unchanged baseline writes, preventing false startup spikes (fixes #24).

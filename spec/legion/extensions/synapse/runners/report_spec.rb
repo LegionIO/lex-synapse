@@ -63,9 +63,9 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Report do
         expect(result[:version]).to eq(1)
       end
 
-      it 'returns 0 success_rate when no signals' do
+      it 'returns nil success_rate when no signals' do
         result = reporter.report(synapse_id: synapse.id)
-        expect(result[:success_rate]).to eq(0.0)
+        expect(result[:success_rate]).to be_nil
       end
 
       it 'returns 0 signals_24h' do
@@ -135,8 +135,17 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Report do
           synapse_id: synapse.id, transform_success: true
         )
         expect(reporter.report(synapse_id: synapse.id)).to include(
-          success_rate: 0.0, completed_outcomes_24h: 0, failed_outcomes_24h: 0,
+          success_rate: nil, completed_outcomes_24h: 0, failed_outcomes_24h: 0,
           unresolved_signals_24h: 1, evaluation_successes_24h: 1
+        )
+      end
+
+      it 'reports a real zero rate when all completed outcomes failed' do
+        Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+          synapse_id: synapse.id, downstream_outcome: 'failed'
+        )
+        expect(reporter.report(synapse_id: synapse.id)).to include(
+          success_rate: 0.0, completed_outcomes_24h: 1, failed_outcomes_24h: 1
         )
       end
     end
