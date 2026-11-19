@@ -21,9 +21,9 @@ module Legion
           CONSECUTIVE_BONUS_THRESHOLD = 50
 
           AUTONOMY_RANGES = {
-            observe:    0.0..0.3,
-            filter:     0.3..0.6,
-            transform:  0.6..0.8,
+            observe:    0.0...0.3,
+            filter:     0.3...0.6,
+            transform:  0.6...0.8,
             autonomous: 0.8..1.0
           }.freeze
 

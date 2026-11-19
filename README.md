@@ -67,10 +67,10 @@ Each synapse has a confidence score (0.0-1.0) that governs what it's allowed to 
 
 | Range | Mode | Permitted Actions |
 |-------|------|-------------------|
-| 0.0-0.3 | OBSERVE | Log what it would do, pass through unchanged |
-| 0.3-0.6 | FILTER | Can suppress signals, cannot modify |
-| 0.6-0.8 | TRANSFORM | Can filter + transform within defined schemas |
-| 0.8-1.0 | AUTONOMOUS | Generates proposals for self-modification |
+| 0.0 <= confidence < 0.3 | OBSERVE | Log what it would do, pass through unchanged |
+| 0.3 <= confidence < 0.6 | FILTER | Can suppress signals, cannot modify |
+| 0.6 <= confidence < 0.8 | TRANSFORM | Can filter + transform within defined schemas |
+| 0.8 <= confidence <= 1.0 | AUTONOMOUS | Generates proposals for self-modification |
 
 **Starting scores**: explicit=0.7, emergent=0.3, seeded=0.5
 

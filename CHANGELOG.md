@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.19] - 2026-11-19
+### Fixed
+- Use non-overlapping autonomy ranges so mode labels match filtering, transformation, and self-modification at their inclusive lower thresholds (fixes #26).
+
 ## [0.4.18] - 2026-11-19
 ### Fixed
 - Bootstrap zero throughput baselines from observed traffic without classifying the initial window as an anomaly; preserve batched homeostasis queries (fixes #24).

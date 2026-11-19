@@ -32,6 +32,25 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Evaluate do
   end
 
   describe '#evaluate' do
+    context 'at capability thresholds' do
+      { 0.3 => :filter, 0.6 => :transform, 0.8 => :autonomous }.each do |confidence, mode|
+        it "reports #{mode} at #{confidence} while enforcing attention" do
+          synapse.update(confidence: confidence, attention: '{"field":"value"}')
+          allow(conditioner_client).to receive(:evaluate).and_return(valid: false, explanation: {})
+          result = evaluator.evaluate(synapse_id: synapse.id, conditioner_client: conditioner_client)
+          expect(result).to include(mode: mode, passed: false, transformed: false)
+        end
+      end
+
+      [0.6, 0.8].each do |confidence|
+        it "executes a configured transform at #{confidence}" do
+          synapse.update(confidence: confidence, transform: '{"template":"hello"}')
+          result = evaluator.evaluate(synapse_id: synapse.id, transformer_client: transformer_client)
+          expect(result[:transformed]).to be true
+        end
+      end
+    end
+
     context 'with no attention or transform rules' do
       it 'returns success' do
         result = evaluator.evaluate(synapse_id: synapse.id, payload: { foo: 'bar' })
