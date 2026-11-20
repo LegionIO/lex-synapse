@@ -128,16 +128,19 @@ module Legion
             mutation = mutation_for_proposal(proposal)
             return { success: false, error: "unsupported proposal_type: #{proposal.proposal_type}" } unless mutation
 
-            result = Object.new.extend(Mutate).mutate(
-              synapse_id:    proposal.synapse_id,
-              mutation_type: mutation[:mutation_type],
-              changes:       mutation[:changes],
-              trigger:       'gaia'
-            )
-            return result unless result[:success]
+            proposal.db.transaction do
+              claimed = Data::Model::SynapseProposal.where(id: proposal.id, status: proposal.status)
+                                                    .update(status: 'applied', reviewed_at: Time.now)
+              next { success: false, error: 'proposal already claimed' } if claimed.zero?
 
-            proposal.update(status: 'applied', reviewed_at: Time.now)
-            result.merge(proposal_id: proposal.id, status: 'applied', decision: 'applied')
+              result = Object.new.extend(Mutate).mutate(
+                synapse_id: proposal.synapse_id, mutation_type: mutation[:mutation_type],
+                changes: mutation[:changes], trigger: 'gaia'
+              )
+              raise Sequel::Error, result[:error] unless result[:success]
+
+              result.merge(proposal_id: proposal.id, status: 'applied', decision: 'applied')
+            end
           end
 
           def run_challenge_cycle(transformer_client: nil, **)

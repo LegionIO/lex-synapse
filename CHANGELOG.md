@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.31] - 2026-11-19
+### Fixed
+- Claim proposal application and persist routing state, mutation history, and applied status in one transaction (fixes #23).
+
 ## [0.4.30] - 2026-11-19
 ### Fixed
 - Report unknown downstream success rates as nil when no outcomes are complete; document reviewed recovery, retry, and decay behavior (fixes #25).
