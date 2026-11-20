@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.32] - 2026-11-19
+### Fixed
+- Resolve proposal and review options through native extension settings, define defaults, and emit structured runtime exceptions while propagating programming errors (fixes #32).
+
 ## [0.4.31] - 2026-11-19
 ### Fixed
 - Claim proposal application and persist routing state, mutation history, and applied status in one transaction (fixes #23).

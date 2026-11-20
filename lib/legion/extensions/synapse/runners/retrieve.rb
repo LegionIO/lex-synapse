@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
-require_relative '../data/models/synapse'
-require_relative '../helpers/confidence'
+require 'legion/logging/helper'
+
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/helpers/confidence'
 
 module Legion
   module Extensions
     module Synapse
       module Runners
         module Retrieve
-          include Legion::Logging::Helper if defined?(Legion::Logging::Helper)
+          include Legion::Logging::Helper
 
           SEED_CONFIDENCE_THRESHOLD = 0.7
 
@@ -48,7 +50,9 @@ module Legion
 
             content.is_a?(String) ? Legion::JSON.load(content) : content
           rescue StandardError => e
-            log.error("parse_pattern failed: #{e.message}")
+            raise if e.is_a?(NoMethodError) || e.is_a?(ArgumentError) || e.is_a?(TypeError)
+
+            handle_exception(e, level: :warn, operation: :parse_synapse_pattern)
             nil
           end
 

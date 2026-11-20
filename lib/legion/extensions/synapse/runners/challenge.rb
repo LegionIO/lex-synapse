@@ -2,14 +2,14 @@
 
 require 'legion/logging/helper'
 
-require_relative '../helpers/challenge'
-require_relative '../helpers/confidence'
-require_relative '../data/models/synapse'
-require_relative '../data/models/synapse_proposal'
-require_relative '../data/models/synapse_challenge'
-require_relative '../data/models/synapse_signal'
-require_relative 'blast_radius'
-require_relative 'mutate'
+require 'legion/extensions/synapse/helpers/challenge'
+require 'legion/extensions/synapse/helpers/confidence'
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_proposal'
+require 'legion/extensions/synapse/data/models/synapse_challenge'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+require 'legion/extensions/synapse/runners/blast_radius'
+require 'legion/extensions/synapse/runners/mutate'
 
 module Legion
   module Extensions
@@ -254,6 +254,8 @@ module Legion
               challenger_confidence: llm_confidence
             )
           rescue StandardError => e
+            raise if e.is_a?(NoMethodError) || e.is_a?(ArgumentError) || e.is_a?(TypeError)
+
             handle_exception(e, level: :warn, operation: :challenge_llm, proposal_id: proposal.id)
             Data::Model::SynapseChallenge.create(
               proposal_id: proposal.id, challenger_type: 'llm',

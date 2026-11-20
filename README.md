@@ -186,3 +186,7 @@ Only active synapses with at least one complete hour since their most recent sig
 ## License
 
 MIT
+
+### Proposal and review settings
+
+Configure `extensions.synapse.proposals` and `extensions.synapse.challenge` using symbol keys through `Legion::Settings` (JSON configuration keys are normalized by the loader). Defaults are exposed by `Legion::Extensions::Synapse.default_settings`. Standalone clients use the same settings and defaults. Migrate the former top-level `lex-synapse` section to `extensions.synapse`; that legacy path is no longer read.

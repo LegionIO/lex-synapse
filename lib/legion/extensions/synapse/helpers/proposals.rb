@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'legion/extensions/synapse/settings'
+
 module Legion
   module Extensions
     module Synapse
@@ -9,26 +11,11 @@ module Legion
           VALID_TRIGGERS = %w[reactive proactive].freeze
           VALID_STATUSES = %w[pending challenging challenged approved rejected applied expired auto_accepted auto_rejected].freeze
 
-          DEFAULT_SETTINGS = {
-            enabled:                 true,
-            reactive:                true,
-            proactive:               true,
-            proactive_interval:      300,
-            max_per_run:             3,
-            llm_engine_options:      { temperature: 0.3, max_tokens: 1024 },
-            success_rate_threshold:  0.8,
-            payload_drift_threshold: 0.2,
-            dedup_window_hours:      24
-          }.freeze
+          DEFAULT_SETTINGS = Legion::Extensions::Synapse::Settings::PROPOSALS
 
           class << self
             def settings
-              raw = Legion::Settings.dig('lex-synapse', 'proposals')
-              return DEFAULT_SETTINGS.dup unless raw.is_a?(Hash)
-
-              merged = DEFAULT_SETTINGS.dup
-              raw.each { |k, v| merged[k.to_sym] = v unless v.nil? }
-              merged
+              Legion::Extensions::Synapse::Settings.section(name: :proposals)
             end
 
             def enabled?

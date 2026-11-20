@@ -4,6 +4,13 @@ require 'spec_helper'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/challenge'
 
 RSpec.describe Legion::Extensions::Synapse::Helpers::Challenge do
+  around do |example|
+    original = Legion::Settings[:extensions]
+    example.run
+  ensure
+    Legion::Settings.loader.settings[:extensions] = original
+  end
+
   describe 'constants' do
     it 'defines VALID_VERDICTS' do
       expect(described_class::VALID_VERDICTS).to contain_exactly('support', 'challenge', 'abstain')
@@ -34,7 +41,7 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Challenge do
   describe '.settings' do
     context 'when no override configured' do
       before do
-        allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'challenge').and_return(nil)
+        Legion::Settings.loader.settings[:extensions] = { synapse: { challenge: {} } }
       end
 
       it 'returns defaults' do
@@ -44,9 +51,7 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Challenge do
 
     context 'when override configured' do
       before do
-        allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'challenge').and_return(
-          { 'impact_threshold' => 0.5, 'enabled' => false }
-        )
+        Legion::Settings.loader.settings[:extensions] = { synapse: { challenge: { impact_threshold: 0.5, enabled: false } } }
       end
 
       it 'merges with defaults' do
@@ -60,13 +65,13 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Challenge do
 
   describe '.enabled?' do
     it 'returns true by default' do
-      allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'challenge').and_return(nil)
+      Legion::Settings.loader.settings[:extensions] = { synapse: { challenge: {} } }
       expect(described_class.enabled?).to be true
     end
   end
 
   describe '.above_impact_threshold?' do
-    before { allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'challenge').and_return(nil) }
+    before { Legion::Settings.loader.settings[:extensions] = { synapse: { challenge: {} } } }
 
     it('returns true when above') { expect(described_class.above_impact_threshold?(0.5)).to be true }
     it('returns false when below') { expect(described_class.above_impact_threshold?(0.1)).to be false }

@@ -4,6 +4,13 @@ require 'spec_helper'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/proposals'
 
 RSpec.describe Legion::Extensions::Synapse::Helpers::Proposals do
+  around do |example|
+    original = Legion::Settings[:extensions]
+    example.run
+  ensure
+    Legion::Settings.loader.settings[:extensions] = original
+  end
+
   describe 'constants' do
     it 'defines VALID_PROPOSAL_TYPES' do
       expect(described_class::VALID_PROPOSAL_TYPES).to include('llm_transform', 'attention_mutation',
@@ -29,9 +36,7 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Proposals do
   describe '.settings' do
     context 'when Legion::Settings returns a hash' do
       before do
-        allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'proposals').and_return(
-          { 'enabled' => false, 'max_per_run' => 5 }
-        )
+        Legion::Settings.loader.settings[:extensions] = { synapse: { proposals: { enabled: false, max_per_run: 5 } } }
       end
 
       it 'merges with defaults' do
@@ -44,7 +49,7 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Proposals do
 
     context 'when Legion::Settings returns nil' do
       before do
-        allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'proposals').and_return(nil)
+        Legion::Settings.loader.settings[:extensions] = { synapse: { proposals: {} } }
       end
 
       it 'returns defaults' do

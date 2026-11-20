@@ -284,6 +284,19 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Propose do
     end
   end
 
+  describe 'runtime exception reporting' do
+    it 'reports provider failures with operation context' do
+      allow(transformer_client).to receive(:transform).and_raise(IOError, 'provider unavailable')
+      expect(proposer).to receive(:handle_exception).with(instance_of(IOError), level: :warn, operation: :proposal_llm)
+      expect(proposer.send(:call_llm, transformer_client, 'prompt')).to eq(output: nil)
+    end
+
+    it 'propagates programming errors' do
+      allow(transformer_client).to receive(:transform).and_raise(NoMethodError, 'invalid call')
+      expect { proposer.send(:call_llm, transformer_client, 'prompt') }.to raise_error(NoMethodError)
+    end
+  end
+
   describe '#lookup_target_schema' do
     it 'returns a discovered target schema when discovery data is available' do
       discovery = Module.new do

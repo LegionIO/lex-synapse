@@ -14,14 +14,9 @@ unless defined?(Legion::Data)
   end
 end
 
-# Force data connected so lazy model definitions run against the in-memory DB
-module Legion
-  module Settings
-    def self.dig(*_keys)
-      true
-    end
-  end
-end
+# Use the real settings loader; model startup must not redefine Settings.dig.
+Legion::Settings.load
+Legion::Settings.loader.settings[:data] = { connected: true }
 
 require_relative '../../lib/legion/extensions/synapse/data/models/synapse'
 require_relative '../../lib/legion/extensions/synapse/data/models/synapse_mutation'

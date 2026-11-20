@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'legion/extensions/synapse/settings'
+
 module Legion
   module Extensions
     module Synapse
@@ -17,30 +19,11 @@ module Legion
             'route_change'       => 0.8
           }.freeze
 
-          DEFAULT_SETTINGS = {
-            enabled:                         true,
-            impact_threshold:                0.3,
-            auto_accept_threshold:           0.85,
-            auto_reject_threshold:           0.15,
-            llm_engine_options:              { temperature: 0.2, max_tokens: 512 },
-            outcome_observation_window:      50,
-            max_per_cycle:                   5,
-            review_max_attempts:             3,
-            review_retry_seconds:            300,
-            review_max_retry_seconds:        3600,
-            challenger_starting_confidence:  0.5,
-            challenger_correct_adjustment:   0.05,
-            challenger_incorrect_adjustment: -0.08
-          }.freeze
+          DEFAULT_SETTINGS = Legion::Extensions::Synapse::Settings::CHALLENGE
 
           class << self
             def settings
-              raw = Legion::Settings.dig('lex-synapse', 'challenge')
-              return DEFAULT_SETTINGS.dup unless raw.is_a?(Hash)
-
-              merged = DEFAULT_SETTINGS.dup
-              raw.each { |k, v| merged[k.to_sym] = v unless v.nil? }
-              merged
+              Legion::Extensions::Synapse::Settings.section(name: :challenge)
             end
 
             def enabled?
