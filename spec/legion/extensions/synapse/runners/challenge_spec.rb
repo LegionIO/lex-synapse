@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'legion/extensions/synapse/actors/challenge'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/challenge'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/confidence'
 require_relative '../../../../../lib/legion/extensions/synapse/helpers/proposals'
@@ -360,24 +361,120 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
     end
   end
 
-  describe 'abstaining LLM challenges' do
-    it 'auto-accepts when every challenger abstains' do
-      allow(runner).to receive(:conflict_check)
-      allow(runner).to receive(:llm_challenge) do |proposal_record, _synapse, _client|
-        Legion::Extensions::Synapse::Data::Model::SynapseChallenge.create(
-          proposal_id:           proposal_record.id,
-          challenger_type:       'llm',
-          verdict:               'abstain',
-          reasoning:             'llm unavailable',
-          challenger_confidence: 0.5
-        )
+  describe 'required review availability' do
+    let(:transformer) { double('transformer_client') }
+
+    before do
+      synapse.update(blast_radius: 'HIGH')
+      allow(runner).to receive(:log).and_return(double('logger', warn: nil))
+    end
+
+    %w[HIGH CRITICAL].each do |tier|
+      it "defers #{tier} proposals when the scheduled cycle has no reviewer" do
+        synapse.update(blast_radius: tier)
+        proposal
+        expect(runner.run_challenge_cycle).to include(deferred: 1, applied: 0, challenged: 0)
+        expect(proposal.refresh.status).to eq('pending')
+        expect(proposal.challenge_state).to eq('deferred')
+        expect(synapse.refresh.transform).to be_nil
+        expect(runner.pending_challenges.map(&:id)).not_to include(proposal.id)
       end
+    end
 
-      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: double('transformer'))
-      proposal.refresh
+    [
+      { success: false },
+      { success: true, result: 'VERDICT: ABSTAIN' },
+      { success: true, result: 'not a review' }
+    ].each do |response|
+      it "defers incomplete review #{response.inspect} and permits a later retry" do
+        allow(transformer).to receive(:transform).and_return(response)
+        result = runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)
+        expect(result).to include(deferred: true, reason: :review_incomplete)
+        expect(proposal.refresh.status).to eq('pending')
 
-      expect(proposal.status).to eq('auto_accepted')
-      expect(proposal.challenge_score).to eq(0.0)
+        proposal.update(next_review_at: Time.now - 1)
+        allow(transformer).to receive(:transform).and_return(success: true, result: 'VERDICT: SUPPORT')
+        expect(runner.run_challenge_cycle(transformer_client: transformer)).to include(applied: 1, deferred: 0)
+        expect(synapse.refresh.transform).to eq(proposal.output)
+        expect(Legion::Extensions::Synapse::Data::Model::SynapseChallenge.where(
+          proposal_id: proposal.id, challenger_type: 'conflict'
+        ).count).to eq(1)
+      end
+    end
+
+    it 'uses the scheduled actor reviewer through the real transformer JSON engine' do
+      llm = Module.new do
+        def self.started? = true
+        def self.chat(**) = nil
+      end
+      stub_const('Legion::LLM', llm)
+      expect(llm).to receive(:chat).with(hash_including(message: include('JSON object')))
+                                   .and_return(Struct.new(:content).new('{"verdict":"support","reasoning":"sound"}'))
+      proposal
+      actor = Legion::Extensions::Synapse::Actor::Challenge.allocate
+      result = actor.public_send(actor.runner_function, **actor.args)
+      expect(result).to include(applied: 1, deferred: 0)
+      expect(proposal.refresh.status).to eq('applied')
+    end
+
+    it 'processes new low-impact proposals ahead of a full deferred queue' do
+      5.times do
+        older = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+          synapse_id: synapse.id, proposal_type: 'transform_mutation', trigger: 'proactive', status: 'pending'
+        )
+        runner.challenge_proposal(proposal_id: older.id)
+        older.update(next_review_at: Time.now - 1)
+      end
+      quiet = Legion::Extensions::Synapse::Data::Model::Synapse.create(confidence: 0.5, status: 'active')
+      fresh = Legion::Extensions::Synapse::Data::Model::SynapseProposal.create(
+        synapse_id: quiet.id, proposal_type: 'transform_mutation', trigger: 'proactive', status: 'pending', output: '{}'
+      )
+      expect(runner.run_challenge_cycle).to include(applied: 1)
+      expect(fresh.refresh.status).to eq('applied')
+    end
+
+    it 'persists exponential retry backoff and expires repeated reviewer failures' do
+      allow(transformer).to receive(:transform).and_return(success: true, result: 'unparseable')
+      runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)
+      expect(proposal.refresh.review_attempts).to eq(1)
+      expect(proposal.next_review_at - Time.now).to be_between(298, 301)
+      10.times { runner.run_challenge_cycle(transformer_client: transformer) }
+      expect(transformer).to have_received(:transform).once
+      proposal.update(next_review_at: Time.now - 1)
+      runner.run_challenge_cycle(transformer_client: transformer)
+      expect(proposal.refresh.next_review_at - Time.now).to be_between(598, 601)
+      proposal.update(next_review_at: Time.now - 1)
+      runner.run_challenge_cycle(transformer_client: transformer)
+      expect(proposal.refresh.status).to eq('expired')
+      expect(proposal.review_attempts).to eq(3)
+      runner.run_challenge_cycle(transformer_client: transformer)
+      expect(transformer).to have_received(:transform).exactly(3).times
+    end
+
+    it 'keeps a reviewer exception deferred and does not mutate routing' do
+      allow(transformer).to receive(:transform).and_raise(StandardError, 'review unavailable')
+      expect(runner.challenge_proposal(proposal_id: proposal.id, transformer_client: transformer)).to include(deferred: true)
+      expect(proposal.refresh.challenge_state).to eq('deferred')
+      expect(synapse.refresh.transform).to be_nil
+    end
+
+    it 'defers previously auto-accepted proposals lacking required review' do
+      proposal.update(status: 'auto_accepted', challenge_state: 'challenged')
+      expect(runner.run_challenge_cycle).to include(deferred: 1, applied: 0)
+      expect(proposal.refresh.status).to eq('pending')
+      expect(synapse.refresh.transform).to be_nil
+    end
+
+    it 'preserves lower-impact automatic application without an LLM review' do
+      synapse.update(blast_radius: 'LOW')
+      proposal
+      expect(runner.run_challenge_cycle).to include(applied: 1, deferred: 0)
+    end
+
+    it 'requires review for high impact even at LOW blast radius' do
+      synapse.update(blast_radius: 'LOW', baseline_throughput: 1.0)
+      2.times { Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id) }
+      expect(runner.challenge_proposal(proposal_id: proposal.id)).to include(deferred: true, reason: :reviewer_unavailable)
     end
   end
 end

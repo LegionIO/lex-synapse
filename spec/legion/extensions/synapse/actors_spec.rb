@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'open3'
 
 require 'legion/extensions/synapse/actors/evaluate'
 require 'legion/extensions/synapse/actors/pain'
@@ -47,6 +48,44 @@ RSpec.describe 'Synapse Actors' do
       it 'returns empty results when no active synapses exist' do
         result = actor.action
         expect(result).to include(spikes: 0, droughts: 0, updated: 0)
+      end
+
+      it 'initializes both lazy models on the first action in a fresh process' do
+        script = <<~RUBY
+          require 'sequel'
+          require 'legion/settings'
+          module Legion
+            module Data; end
+            module Settings
+              def self.dig(*) = true
+            end
+            module Extensions
+              module Actors
+                class Every; end
+              end
+            end
+          end
+          db = Sequel.sqlite
+          Sequel.extension :migration
+          Sequel::Migrator.run(db, 'lib/legion/extensions/synapse/data/migrations')
+          Sequel::Model.db = db
+          db[:synapses].insert(status: 'active', baseline_throughput: 10.0)
+          require 'legion/extensions/synapse/helpers/homeostasis'
+          require 'legion/extensions/synapse/actors/homeostasis'
+          models = Legion::Extensions::Synapse::Data::Model
+          abort 'model initialized too early' if models.const_defined?(:Synapse, false)
+          result = Legion::Extensions::Synapse::Actor::Homeostasis.allocate.action
+          abort result.inspect unless result[:updated] == 1 && result[:droughts] == 1
+          abort 'baseline not updated' unless db[:synapses].get(:baseline_throughput) == 9.0
+        RUBY
+        stdout, stderr, status = Open3.capture3(RbConfig.ruby, '-Ilib', '-e', script)
+        expect(status.success?).to be(true), "#{stdout}#{stderr}"
+      end
+
+      it 'reports unavailable data when lazy model initialization cannot run' do
+        hide_const('Legion::Extensions::Synapse::Data::Model::SynapseSignal')
+        allow(Legion::Settings).to receive(:dig).with(:data, :connected).and_return(false)
+        expect(actor.action).to eq(status: :skipped, reason: :no_data)
       end
 
       context 'with one active synapse and no recent signals' do
@@ -115,6 +154,55 @@ RSpec.describe 'Synapse Actors' do
           expect(result[:updated]).to eq(2)
           signal_queries = query_log.count { |q| q.to_s.include?('synapse_signals') }
           expect(signal_queries).to be <= 1
+        end
+      end
+
+      context 'with a new active synapse' do
+        let!(:synapse) { Legion::Extensions::Synapse::Data::Model::Synapse.create(status: 'active') }
+
+        it 'keeps a silent zero baseline without reporting an anomaly' do
+          expect(Sequel::Model.db).not_to receive(:execute_dui)
+          expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 0)
+          expect(synapse.reload.baseline_throughput).to eq(0.0)
+        end
+
+        it 'bootstraps from traffic without false spikes or unchanged writes in steady windows' do
+          10.times do
+            Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+              synapse_id: synapse.id, created_at: Time.now
+            )
+          end
+          expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(10.0)
+          expect(Sequel::Model.db).not_to receive(:execute_dui)
+          5.times do
+            expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 0)
+          end
+          expect(synapse.reload.baseline_throughput).to eq(10.0)
+        end
+
+        it 'can detect a drought after bootstrapping a sufficiently busy baseline' do
+          100.times do
+            Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+              synapse_id: synapse.id, created_at: Time.now
+            )
+          end
+          expect(actor.action).to eq(spikes: 0, droughts: 0, updated: 1)
+          Legion::Extensions::Synapse::Data::Model::SynapseSignal.dataset.update(created_at: Time.now - 120)
+          expect(actor.action).to eq(spikes: 0, droughts: 1, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(90.0)
+        end
+
+        it 'still detects a real spike after a baseline has been established' do
+          10.times do
+            Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id)
+          end
+          actor.action
+          30.times do
+            Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id)
+          end
+          expect(actor.action).to eq(spikes: 1, droughts: 0, updated: 1)
+          expect(synapse.reload.baseline_throughput).to eq(13.0)
         end
       end
 

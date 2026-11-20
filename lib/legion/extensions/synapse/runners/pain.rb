@@ -14,24 +14,27 @@ module Legion
 
           CONSECUTIVE_FAILURE_THRESHOLD = 3
 
-          def handle_pain(synapse_id:, task_id: nil)
+          def handle_pain(synapse_id:, task_id: nil, signal_id: nil, **)
             Data::Model.define_synapse_model
             Data::Model.define_synapse_signal_model
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 
-            # Record failed signal
-            Data::Model::SynapseSignal.create(
-              synapse_id:         synapse.id,
-              task_id:            task_id,
-              passed_attention:   true,
-              transform_success:  true,
-              downstream_outcome: 'failed'
-            )
+            # A task completion updates its original evaluation; repeated events are neutral.
+            if signal_id
+              changed = Legion::Extensions::Synapse::Data::Model::SynapseSignal
+                        .where(id: signal_id, synapse_id: synapse_id, task_id: task_id, downstream_outcome: nil)
+                        .update(downstream_outcome: 'failed', success_credit_pending: false)
+              return { success: true, duplicate: true } if changed.zero?
+            else
+              Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+                synapse_id: synapse.id, task_id: task_id, passed_attention: true,
+                transform_success: true, downstream_outcome: 'failed'
+              )
+            end
 
             # Adjust confidence
-            new_confidence = Helpers::Confidence.adjust(synapse.confidence, :failure)
-            synapse.update(confidence: new_confidence)
+            new_confidence = Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :failure)
 
             # Check consecutive failures
             consecutive = count_consecutive_failures(synapse)

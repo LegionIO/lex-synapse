@@ -9,6 +9,7 @@ require 'legion/json'
 require 'legion/settings'
 
 require_relative 'support/database'
+require_relative 'support/events'
 
 unless defined?(Legion::Extensions::Helpers::Lex)
   module Legion

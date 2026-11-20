@@ -126,8 +126,8 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Confidence do
       expect(described_class.autonomy_mode(0.15)).to eq(:observe)
     end
 
-    it 'returns :observe for confidence 0.3 (observe range upper bound, inclusive)' do
-      expect(described_class.autonomy_mode(0.3)).to eq(:observe)
+    it 'returns :filter at the inclusive 0.3 threshold' do
+      expect(described_class.autonomy_mode(0.3)).to eq(:filter)
     end
 
     it 'returns :filter for confidence 0.31 (above observe range)' do
@@ -138,8 +138,8 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Confidence do
       expect(described_class.autonomy_mode(0.5)).to eq(:filter)
     end
 
-    it 'returns :filter for confidence 0.6 (filter range upper bound, inclusive)' do
-      expect(described_class.autonomy_mode(0.6)).to eq(:filter)
+    it 'returns :transform at the inclusive 0.6 threshold' do
+      expect(described_class.autonomy_mode(0.6)).to eq(:transform)
     end
 
     it 'returns :transform for confidence 0.61 (above filter range)' do
@@ -150,8 +150,8 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Confidence do
       expect(described_class.autonomy_mode(0.7)).to eq(:transform)
     end
 
-    it 'returns :transform for confidence 0.8 (transform range upper bound, inclusive)' do
-      expect(described_class.autonomy_mode(0.8)).to eq(:transform)
+    it 'returns :autonomous at the inclusive 0.8 threshold' do
+      expect(described_class.autonomy_mode(0.8)).to eq(:autonomous)
     end
 
     it 'returns :autonomous for confidence 0.81 (above transform range)' do
@@ -160,6 +160,27 @@ RSpec.describe Legion::Extensions::Synapse::Helpers::Confidence do
 
     it 'returns :autonomous for confidence 1.0 (max)' do
       expect(described_class.autonomy_mode(1.0)).to eq(:autonomous)
+    end
+  end
+
+  describe 'boundary consistency' do
+    {
+      0.2999 => [:observe, false, false, false],
+      0.3    => [:filter, true, false, false],
+      0.3001 => [:filter, true, false, false],
+      0.5999 => [:filter, true, false, false],
+      0.6    => [:transform, true, true, false],
+      0.6001 => [:transform, true, true, false],
+      0.7999 => [:transform, true, true, false],
+      0.8    => [:autonomous, true, true, true],
+      0.8001 => [:autonomous, true, true, true]
+    }.each do |confidence, expected|
+      it "agrees on the mode and capabilities at #{confidence}" do
+        expect([
+                 described_class.autonomy_mode(confidence), described_class.can_filter?(confidence),
+                 described_class.can_transform?(confidence), described_class.can_self_modify?(confidence)
+               ]).to eq(expected)
+      end
     end
   end
 

@@ -25,6 +25,8 @@ module Legion
             end
 
             def update_baseline(current_baseline, new_sample, alpha: 0.1)
+              return new_sample if current_baseline.zero? || current_baseline == new_sample
+
               ((1 - alpha) * current_baseline) + (alpha * new_sample)
             end
 

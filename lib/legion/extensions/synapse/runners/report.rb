@@ -9,7 +9,7 @@ module Legion
     module Synapse
       module Runners
         module Report
-          def report(synapse_id:)
+          def report(synapse_id:, **)
             Data::Model.define_synapse_model
             Data::Model.define_synapse_mutation_model
             Data::Model.define_synapse_signal_model
@@ -22,28 +22,35 @@ module Legion
 
             total_recent = recent_signals.count
             successful = recent_signals.where(downstream_outcome: 'success').count
-            success_rate = total_recent.positive? ? (successful.to_f / total_recent).round(4) : 0.0
+            failed = recent_signals.where(downstream_outcome: 'failed').count
+            completed = successful + failed
+            success_rate = completed.positive? ? (successful.to_f / completed).round(4) : nil
 
             last_mutation = synapse.mutations_dataset.order(Sequel.desc(:id)).first
 
             {
-              success:       true,
-              synapse_id:    synapse.id,
-              confidence:    synapse.confidence,
-              status:        synapse.status,
-              origin:        synapse.origin,
-              version:       synapse.version,
-              signals_24h:   total_recent,
-              success_rate:  success_rate,
-              total_signals: signals.count,
-              last_mutation: if last_mutation
-                               {
-                                 type:    last_mutation.mutation_type,
-                                 trigger: last_mutation.trigger,
-                                 version: last_mutation.version,
-                                 outcome: last_mutation.outcome
-                               }
-                             end
+              success:                  true,
+              synapse_id:               synapse.id,
+              confidence:               synapse.confidence,
+              status:                   synapse.status,
+              origin:                   synapse.origin,
+              version:                  synapse.version,
+              signals_24h:              total_recent,
+              success_rate:             success_rate,
+              completed_outcomes_24h:   completed,
+              successful_outcomes_24h:  successful,
+              failed_outcomes_24h:      failed,
+              unresolved_signals_24h:   total_recent - completed,
+              evaluation_successes_24h: recent_signals.where(transform_success: true).count,
+              total_signals:            signals.count,
+              last_mutation:            if last_mutation
+                                          {
+                                            type:    last_mutation.mutation_type,
+                                            trigger: last_mutation.trigger,
+                                            version: last_mutation.version,
+                                            outcome: last_mutation.outcome
+                                          }
+                                        end
             }
           end
         end

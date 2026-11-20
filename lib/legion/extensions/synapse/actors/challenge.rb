@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'legion/extensions/transformer/client'
+
 require_relative '../runners/challenge'
 
 module Legion
@@ -8,6 +10,10 @@ module Legion
       module Actor
         class Challenge < Legion::Extensions::Actors::Every
           include Legion::Extensions::Synapse::Runners::Challenge
+
+          def args
+            { transformer_client: Legion::Extensions::Transformer::Client.new }
+          end
 
           def runner_class = self.class
 

@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+
 module Legion
   module Extensions
     module Synapse
@@ -14,8 +17,14 @@ module Legion
           def action(**)
             return { status: :skipped, reason: :no_data } unless defined?(Legion::Data)
 
+            Legion::Extensions::Synapse::Data::Model.define_synapse_model
+            Legion::Extensions::Synapse::Data::Model.define_synapse_signal_model
+            unless defined?(Legion::Extensions::Synapse::Data::Model::Synapse) &&
+                   defined?(Legion::Extensions::Synapse::Data::Model::SynapseSignal)
+              return { status: :skipped, reason: :no_data }
+            end
+
             results = { spikes: 0, droughts: 0, updated: 0 }
-            return results unless defined?(Legion::Extensions::Synapse::Data::Model::Synapse)
 
             cutoff = Time.now - 60
             window_seconds = 60.0
@@ -27,9 +36,8 @@ module Legion
                                         .group_and_count(:synapse_id)
                                         .as_hash(:synapse_id, :count)
 
-            # Fetch only active synapses with a nonzero baseline — eager-load to avoid N+1
+            # Include new zero baselines so the first traffic window can initialize the EWMA
             active_synapses = synapse_model.where(status: 'active')
-                                           .where { baseline_throughput > 0 } # rubocop:disable Style/NumericPredicate
                                            .all
             return results if active_synapses.empty?
 
@@ -48,6 +56,8 @@ module Legion
               end
 
               new_baseline = Helpers::Homeostasis.update_baseline(baseline, current)
+              next if new_baseline == baseline
+
               updates << { synapse_id: synapse.id, baseline_throughput: new_baseline }
               results[:updated] += 1
             end

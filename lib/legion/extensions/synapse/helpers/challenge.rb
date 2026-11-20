@@ -8,7 +8,7 @@ module Legion
           VALID_VERDICTS = %w[support challenge abstain].freeze
           VALID_CHALLENGER_TYPES = %w[conflict llm].freeze
           VALID_OUTCOMES = %w[correct incorrect].freeze
-          VALID_CHALLENGE_STATES = %w[challenging challenged].freeze
+          VALID_CHALLENGE_STATES = %w[challenging challenged deferred].freeze
 
           IMPACT_WEIGHTS = {
             'llm_transform'      => 0.7,
@@ -25,6 +25,9 @@ module Legion
             llm_engine_options:              { temperature: 0.2, max_tokens: 512 },
             outcome_observation_window:      50,
             max_per_cycle:                   5,
+            review_max_attempts:             3,
+            review_retry_seconds:            300,
+            review_max_retry_seconds:        3600,
             challenger_starting_confidence:  0.5,
             challenger_correct_adjustment:   0.05,
             challenger_incorrect_adjustment: -0.08

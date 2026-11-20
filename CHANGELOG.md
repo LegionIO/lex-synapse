@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.4.30] - 2026-11-19
+### Fixed
+- Report unknown downstream success rates as nil when no outcomes are complete; document reviewed recovery, retry, and decay behavior (fixes #25).
+
+## [0.4.29] - 2026-11-19
+### Fixed
+- Seed zero throughput baselines from the full first traffic window and avoid unchanged baseline writes, preventing false startup spikes (fixes #24).
+
+## [0.4.28] - 2026-11-19
+### Fixed
+- Wire the scheduled reviewer through transformer JSON results, prioritize fresh proposals, and persist bounded exponential review retries with expiry (fixes #27).
+
+## [0.4.27] - 2026-11-19
+### Fixed
+- Start existing decay checkpoints at upgrade time and use conditional SQL multiplication without explicit locks, preserving concurrent confidence updates and newly arrived traffic (fixes #28).
+
+## [0.4.26] - 2026-11-19
+### Fixed
+- Recover observe-mode confidence from confirmed downstream successes once, preserve evaluation credit provenance, and update confidence/streaks atomically in SQL; keep failure outcome handling outside a broad transaction (fixes #15, fixes #16).
+
+## [0.4.25] - 2026-11-19
+### Fixed
+- Align README and agent notes with callable client/runner APIs, mutation-history simulation, automatic proposal review/application, and current tasker/Apollo integration limits (fixes #31).
+
+## [0.4.24] - 2026-11-19
+### Fixed
+- Forward the injected reviewer through standalone client challenge cycles and initialize signals before application-time review checks (fixes #27).
+
+## [0.4.23] - 2026-11-19
+### Fixed
+- Decay only complete idle hours since the latest activity, persisting a transactional checkpoint to prevent duplicate decay across retries and restarts (fixes #28).
+
+## [0.4.22] - 2026-11-19
+### Fixed
+- Defer required challenge reviews when the reviewer is absent, fails, or abstains; retry deferred reviews and prevent unreviewed automatic application (fixes #27).
+
+## [0.4.21] - 2026-11-19
+### Fixed
+- Calculate downstream success rate from completed outcomes only, expose unresolved and evaluation counts, and verify duplicate-safe task outcome correlation (fixes #25).
+
+## [0.4.20] - 2026-11-19
+### Fixed
+- Keep observe-mode pass-through and clean attention rejections neutral for confidence and learning streaks; record the actual observed attention verdict (fixes #15).
+
+## [0.4.19] - 2026-11-19
+### Fixed
+- Use non-overlapping autonomy ranges so mode labels match filtering, transformation, and self-modification at their inclusive lower thresholds (fixes #26).
+
+## [0.4.18] - 2026-11-19
+### Fixed
+- Bootstrap zero throughput baselines from observed traffic without classifying the initial window as an anomaly; preserve batched homeostasis queries (fixes #24).
+
+## [0.4.17] - 2026-11-19
+### Fixed
+- Initialize both homeostasis models on its first tick and report unavailable data explicitly (fixes #20).
+
+## [0.4.16] - 2026-11-19
+### Fixed
+- Correct the documented hourly decay conversion to approximately 4.7% daily and a 14.4-day half-life (fixes #17).
+- Preserve reactive repair eligibility across a failure penalty and persist consecutive successes for the existing >50 bonus, resetting the streak on failure (fixes #16).
+- Connect wrapped relationship evaluation to lex-tasker 0.4.1 and subscribe to host task completion/failure events with durable task/signal correlation and duplicate outcome protection (references #18; tasker companion required).
+
 ## [0.4.15] - 2026-10-29
 ### Fixed
 - Treat missing configured conditioner/transformer capabilities as unavailable rather than successful learning; retain legitimate observe/filter pass-through.

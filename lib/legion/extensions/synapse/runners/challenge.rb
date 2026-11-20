@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'legion/logging/helper'
+
 require_relative '../helpers/challenge'
 require_relative '../helpers/confidence'
 require_relative '../data/models/synapse'
@@ -14,15 +16,18 @@ module Legion
     module Synapse
       module Runners
         module Challenge
+          include Legion::Logging::Helper
           include BlastRadius
 
           def pending_challenges
             Data::Model.define_synapse_proposal_model
-            Data::Model::SynapseProposal.where(status: 'pending', challenge_state: nil)
-                                        .order(Sequel.asc(:id)).all
+            Data::Model::SynapseProposal.where(status: 'pending')
+                                        .where(Sequel.|({ challenge_state: nil }, { challenge_state: 'deferred' }))
+                                        .where(Sequel.|({ next_review_at: nil }, Sequel[:next_review_at] <= Time.now))
+                                        .order(Sequel.case({ { challenge_state: nil } => 0 }, 1), Sequel.asc(:id)).all
           end
 
-          def challenge_proposal(proposal_id:, transformer_client: nil)
+          def challenge_proposal(proposal_id:, transformer_client: nil, **)
             Data::Model.define_synapse_proposal_model
             Data::Model.define_synapse_challenge_model
             Data::Model.define_synapse_model
@@ -32,23 +37,36 @@ module Legion
 
             proposal = Data::Model::SynapseProposal[proposal_id]
             return { success: false, error: 'proposal not found' } unless proposal
-            return { success: false, error: 'proposal not challengeable' } unless proposal.status == 'pending' && proposal.challenge_state.nil?
+
+            challengeable = proposal.status == 'pending' && [nil, 'deferred'].include?(proposal.challenge_state)
+            return { success: false, error: 'proposal not challengeable' } unless challengeable
 
             synapse = Data::Model::Synapse[proposal.synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 
-            proposal.update(challenge_state: 'challenging')
+            if proposal.next_review_at && proposal.next_review_at > Time.now
+              return { success: false, deferred: true, proposal_id: proposal.id, reason: :review_backoff }
+            end
+
+            claimed = Data::Model::SynapseProposal.where(id: proposal.id, status: 'pending',
+                                                         challenge_state: proposal.challenge_state,
+                                                         review_attempts: proposal.review_attempts).update(challenge_state: 'challenging')
+            return { success: false, error: 'proposal already claimed' } if claimed.zero?
+
+            proposal.refresh
 
             impact = calculate_impact_score(proposal, synapse)
             confidence_impact = estimate_confidence_impact(proposal, synapse)
             proposal.update(impact_score: impact, estimated_confidence_impact: confidence_impact)
 
+            if review_required?(impact: impact, synapse: synapse)
+              return defer_review(proposal: proposal, reason: :reviewer_unavailable) unless transformer_client
+
+              review = llm_challenge(proposal, synapse, transformer_client)
+              return defer_review(proposal: proposal, reason: :review_incomplete) if review.verdict == 'abstain'
+            end
+
             conflict_check(proposal)
-
-            needs_llm = Helpers::Challenge.above_impact_threshold?(impact) ||
-                        requires_llm_review?(synapse.blast_radius.to_s)
-            llm_challenge(proposal, synapse, transformer_client) if needs_llm && transformer_client
-
             aggregate_challenges(proposal)
           end
 
@@ -88,7 +106,9 @@ module Legion
             { success: true, proposal_id: proposal_id, success_rate: success_rate, resolved: challenges.size }
           end
 
-          def apply_proposal(proposal_id:)
+          def apply_proposal(proposal_id:, **)
+            Data::Model.define_synapse_signal_model
+            Data::Model.define_synapse_challenge_model
             Data::Model.define_synapse_proposal_model
             Data::Model.define_synapse_model
 
@@ -99,6 +119,11 @@ module Legion
 
             synapse = Data::Model::Synapse[proposal.synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
+
+            if proposal.status == 'auto_accepted' && review_required?(impact: calculate_impact_score(proposal, synapse), synapse: synapse)
+              reviewed = Data::Model::SynapseChallenge.where(proposal_id: proposal.id, challenger_type: 'llm', verdict: %w[support challenge]).any?
+              return defer_review(proposal: proposal, reason: :reviewer_unavailable) unless reviewed
+            end
 
             mutation = mutation_for_proposal(proposal)
             return { success: false, error: "unsupported proposal_type: #{proposal.proposal_type}" } unless mutation
@@ -115,24 +140,26 @@ module Legion
             result.merge(proposal_id: proposal.id, status: 'applied', decision: 'applied')
           end
 
-          def run_challenge_cycle(transformer_client: nil)
+          def run_challenge_cycle(transformer_client: nil, **)
             Data::Model.define_synapse_proposal_model
             Data::Model.define_synapse_challenge_model
-            return { challenged: 0, applied: 0, resolved: 0 } unless Helpers::Challenge.enabled?
+            return { challenged: 0, deferred: 0, applied: 0, resolved: 0 } unless Helpers::Challenge.enabled?
 
             settings = Helpers::Challenge.settings
             max = settings[:max_per_cycle] || 5
 
             challenged = 0
+            deferred = 0
             pending_challenges.first(max).each do |proposal|
-              challenge_proposal(proposal_id: proposal.id, transformer_client: transformer_client)
-              challenged += 1
+              result = challenge_proposal(proposal_id: proposal.id, transformer_client: transformer_client)
+              result[:deferred] ? deferred += 1 : challenged += 1
             end
 
             applied = 0
             Data::Model::SynapseProposal.where(status: 'auto_accepted').order(Sequel.asc(:id)).limit(max).each do |proposal|
               result = apply_proposal(proposal_id: proposal.id)
               applied += 1 if result[:success]
+              deferred += 1 if result[:deferred]
             end
 
             resolved = 0
@@ -152,10 +179,26 @@ module Legion
               resolved += 1
             end
 
-            { challenged: challenged, applied: applied, resolved: resolved }
+            { challenged: challenged, deferred: deferred, applied: applied, resolved: resolved }
           end
 
           private
+
+          def review_required?(impact:, synapse:)
+            Legion::Extensions::Synapse::Helpers::Challenge.above_impact_threshold?(impact) ||
+              requires_llm_review?(synapse.blast_radius.to_s)
+          end
+
+          def defer_review(proposal:, reason:)
+            settings = Legion::Extensions::Synapse::Helpers::Challenge.settings
+            attempts = proposal.review_attempts + 1
+            expired = attempts >= settings[:review_max_attempts]
+            delay = [settings[:review_retry_seconds] * (2**(attempts - 1)), settings[:review_max_retry_seconds]].min
+            proposal.update(status: expired ? 'expired' : 'pending', challenge_state: 'deferred', challenge_score: nil,
+                            review_attempts: attempts, next_review_at: expired ? nil : Time.now + delay)
+            { success: false, deferred: !expired, expired: expired, proposal_id: proposal.id,
+              decision: expired ? 'expired' : 'deferred', reason: reason }
+          end
 
           def mutation_for_proposal(proposal)
             case proposal.proposal_type
@@ -208,7 +251,7 @@ module Legion
               challenger_confidence: llm_confidence
             )
           rescue StandardError => e
-            log.warn("Challenge LLM call failed: #{e.message}")
+            handle_exception(e, level: :warn, operation: :challenge_llm, proposal_id: proposal.id)
             Data::Model::SynapseChallenge.create(
               proposal_id: proposal.id, challenger_type: 'llm',
               verdict: 'abstain', reasoning: "LLM error: #{e.message}",
@@ -269,12 +312,16 @@ module Legion
               "Rationale: #{proposal.rationale}\n" \
               "Proposed inputs: #{proposal.inputs}\n" \
               "Proposed output: #{proposal.output}\n\n" \
-              "Is this change sound? Respond in exactly this format:\n" \
-              "VERDICT: SUPPORT or CHALLENGE or ABSTAIN\n" \
-              'REASONING: one sentence explanation'
+              'Is this change sound? Respond with a JSON object containing "verdict" ("support", "challenge", or "abstain") ' \
+              'and "reasoning" (one sentence explanation).'
           end
 
           def parse_llm_verdict(response)
+            if response.is_a?(Hash)
+              verdict = response[:verdict].to_s.downcase
+              verdict = 'abstain' unless Legion::Extensions::Synapse::Helpers::Challenge::VALID_VERDICTS.include?(verdict)
+              return [verdict, response[:reasoning].to_s.slice(0, 200)]
+            end
             return ['abstain', 'no LLM response'] unless response.is_a?(String)
 
             text = response.to_s.strip

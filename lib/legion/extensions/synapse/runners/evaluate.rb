@@ -14,7 +14,7 @@ module Legion
         module Evaluate
           include Propose
 
-          def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil)
+          def evaluate(synapse_id:, payload: {}, conditioner_client: nil, transformer_client: nil, **)
             Data::Model.define_synapse_model
             Data::Model.define_synapse_signal_model
             Data::Model.define_synapse_proposal_model
@@ -22,6 +22,7 @@ module Legion
             return { success: false, error: 'synapse not found' } unless synapse
             return { success: false, error: 'synapse not active' } unless Helpers::Confidence::EVALUABLE_STATUSES.include?(synapse.status)
 
+            proposal_eligible = Legion::Extensions::Synapse::Helpers::Confidence.can_self_modify?(synapse.confidence)
             mode = Helpers::Confidence.autonomy_mode(synapse.confidence)
             start_time = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC, :millisecond)
 
@@ -52,18 +53,15 @@ module Legion
             end
 
             # Step 3: Record signal
-            signal_record = record_signal(synapse, attention_result[:passed], transform_result[:success], elapsed)
+            signal_record = record_signal(synapse, attention_result[:observed_passed], transform_result[:success], elapsed,
+                                          success_credit_pending: mode == :observe && transform_result[:success])
 
-            # Step 4: Adjust confidence (skip if run_transform already penalized for validation failure)
-            new_confidence = synapse.confidence
-            unless transform_result[:validation_failure]
-              event = transform_result[:success] ? :success : :failure
-              new_confidence = Helpers::Confidence.adjust(synapse.confidence, event)
-              synapse.update(confidence: new_confidence)
-            end
+            # Step 4: Observation and correct filtering are neutral; transform failures are penalized once.
+            new_confidence = adjust_evaluation_confidence(synapse: synapse, transform_result: transform_result,
+                                                          mode: mode, attention_result: attention_result)
 
             # Step 5: Generate proposals if autonomous
-            if Helpers::Confidence.can_self_modify?(new_confidence) && Helpers::Proposals.reactive?
+            if (proposal_eligible || Helpers::Confidence.can_self_modify?(new_confidence)) && Helpers::Proposals.reactive?
               propose_reactive(
                 synapse: synapse, payload: payload, signal_id: signal_record&.id,
                 attention_result: attention_result, transform_result: transform_result,
@@ -77,23 +75,28 @@ module Legion
               passed:      attention_result[:passed],
               transformed: transform_result[:transformed] == true,
               result:      transform_result[:result],
-              latency_ms:  elapsed
+              latency_ms:  elapsed,
+              signal_id:   signal_record.id
             }
           end
 
           private
 
+          def adjust_evaluation_confidence(synapse:, transform_result:, mode:, attention_result:)
+            return synapse.confidence if mode == :observe || !attention_result[:passed]
+            return synapse.confidence if transform_result[:validation_failure]
+
+            event = transform_result[:success] ? :success : :failure
+            Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: event)
+          end
+
           def check_attention(synapse, payload, mode, conditioner_client)
-            return { passed: true } if synapse.attention.nil? || synapse.attention.empty?
+            return { passed: true, observed_passed: true } if synapse.attention.nil? || synapse.attention.empty?
             return { passed: mode == :observe, unavailable: true, error: 'conditioner unavailable' } unless conditioner_client.respond_to?(:evaluate)
 
             result = conditioner_client.evaluate(conditions: Legion::JSON.load(synapse.attention), values: payload)
-            passed = result[:valid]
-
-            # In OBSERVE mode, always pass through regardless of result
-            passed = true if mode == :observe
-
-            { passed: passed }
+            # Preserve the measured verdict even when observe mode permits pass-through.
+            { passed: mode == :observe || result[:valid], observed_passed: result[:valid] }
           end
 
           def run_transform(synapse, payload, transformer_client)
@@ -111,18 +114,18 @@ module Legion
             if result[:success]
               { success: true, transformed: true, result: result[:result] }
             else
-              new_conf = Helpers::Confidence.adjust(synapse.confidence, :validation_failure)
-              synapse.update(confidence: new_conf)
+              Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :validation_failure)
               { success: false, result: payload, error: result[:errors], validation_failure: true }
             end
           end
 
-          def record_signal(synapse, passed_attention, transform_success, latency_ms)
+          def record_signal(synapse, passed_attention, transform_success, latency_ms, success_credit_pending: false)
             Data::Model::SynapseSignal.create(
-              synapse_id:        synapse.id,
-              passed_attention:  passed_attention,
-              transform_success: transform_success,
-              latency_ms:        latency_ms.to_i
+              synapse_id:             synapse.id,
+              passed_attention:       passed_attention,
+              transform_success:      transform_success,
+              latency_ms:             latency_ms.to_i,
+              success_credit_pending: success_credit_pending
             )
           end
 

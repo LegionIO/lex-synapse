@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+require 'legion/extensions/synapse/helpers/confidence'
+
 module Legion
   module Extensions
     module Synapse
@@ -11,18 +15,31 @@ module Legion
           def check_subtask? = false
           def generate_task? = false
 
-          def action(**)
+          def action(now: Time.now, **)
             return { status: :skipped, reason: :no_data } unless defined?(Legion::Data)
 
-            Data::Model.define_synapse_model
+            Legion::Extensions::Synapse::Data::Model.define_synapse_model
+            Legion::Extensions::Synapse::Data::Model.define_synapse_signal_model
+            unless defined?(Legion::Extensions::Synapse::Data::Model::Synapse) &&
+                   defined?(Legion::Extensions::Synapse::Data::Model::SynapseSignal)
+              return { status: :skipped, reason: :no_data }
+            end
+
+            model = Legion::Extensions::Synapse::Data::Model::Synapse
+            signals = Legion::Extensions::Synapse::Data::Model::SynapseSignal
             decayed = 0
+            model.where(status: 'active').each do |synapse|
+              last_signal = signals.where(synapse_id: synapse.id).order(Sequel.desc(:created_at)).first&.created_at
+              idle_start = [synapse.created_at, last_signal, synapse.last_decay_at].compact.max
+              hours = ((now - idle_start) / 3600).floor
+              next unless hours.positive?
 
-            Data::Model::Synapse.where(status: 'active').each do |synapse|
-              new_conf = Helpers::Confidence.decay(synapse.confidence, hours: 1)
-              next if new_conf == synapse.confidence
-
-              synapse.update(confidence: new_conf)
-              decayed += 1
+              factor = Legion::Extensions::Synapse::Helpers::Confidence::DECAY_RATE**hours
+              recent_activity = signals.where(synapse_id: synapse.id).where { created_at > idle_start }
+              changed = model.where(id: synapse.id, status: 'active', last_decay_at: synapse.last_decay_at)
+                             .exclude(recent_activity.exists)
+                             .update(confidence: Sequel[:confidence] * factor, last_decay_at: idle_start + (hours * 3600))
+              decayed += changed if synapse.confidence.positive?
             end
 
             { decayed: decayed }
