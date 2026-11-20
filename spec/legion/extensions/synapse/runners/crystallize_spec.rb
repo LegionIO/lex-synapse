@@ -10,6 +10,38 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Crystallize do
     Legion::Extensions::Synapse::Data::Model::Synapse.where(origin: 'emergent').delete
   end
 
+  describe 'scheduled traffic discovery' do
+    before do
+      DB.create_table(:tasks) do
+        primary_key :id
+        Integer :parent_id
+        Integer :function_id
+        String :status
+      end
+      parent = DB[:tasks].insert(function_id: 900, status: 'task.completed')
+      20.times { DB[:tasks].insert(parent_id: parent, function_id: 901, status: 'task.completed') }
+    end
+
+    after { DB.drop_table(:tasks) }
+
+    it 'creates an observing synapse without caller supplied pairs and does not duplicate it' do
+      expect(crystallizer.crystallize[:count]).to eq(1)
+      synapse = Legion::Extensions::Synapse::Data::Model::Synapse.first(source_function_id: 900, target_function_id: 901)
+      expect(synapse.status).to eq('observing')
+      expect(crystallizer.crystallize[:count]).to eq(0)
+    end
+
+    it 'ignores incomplete tasks and below threshold traffic' do
+      DB[:tasks].where(id: DB[:tasks].where(function_id: 901).get(:id)).update(status: 'task.failed')
+      expect(crystallizer.crystallize[:count]).to eq(0)
+    end
+
+    it 'bounds collection to the latest completed children' do
+      stub_const('Legion::Extensions::Synapse::Runners::Crystallize::TRAFFIC_SAMPLE_LIMIT', 19)
+      expect(crystallizer.crystallize[:count]).to eq(0)
+    end
+  end
+
   describe '#crystallize' do
     context 'with empty input' do
       it 'returns success with zero count' do

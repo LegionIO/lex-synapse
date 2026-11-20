@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.33] - 2026-11-19
+### Fixed
+- Feed periodic crystallization from the latest 1000 completed parent-child task edges, retaining threshold and duplicate checks (fixes #29).
+
 ## [0.4.32] - 2026-11-19
 ### Fixed
 - Resolve proposal and review options through native extension settings, define defaults, and emit structured runtime exceptions while propagating programming errors (fixes #32).
