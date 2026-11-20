@@ -15,7 +15,9 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
 
   before do
     allow(Legion::Settings).to receive(:dig).and_return(nil)
-    allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'challenge').and_return(settings_default)
+    allow(Legion::Extensions::Synapse::Helpers::Challenge).to receive(:settings).and_return(
+      Legion::Extensions::Synapse::Helpers::Challenge::DEFAULT_SETTINGS.merge(settings_default || {})
+    )
     allow(Legion::Settings).to receive(:dig).with('lex-synapse', 'proposals').and_return(nil)
     allow(Legion::Settings).to receive(:dig).with(:data, :connected).and_return(true)
 
@@ -208,6 +210,24 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
   end
 
   describe '#apply_proposal' do
+    it 'rolls back the proposal claim and live state if history cannot be written' do
+      proposal.update(status: 'approved')
+      allow(Legion::Extensions::Synapse::Data::Model::SynapseMutation).to receive(:create).and_raise(Sequel::Error, 'history unavailable')
+
+      expect { runner.apply_proposal(proposal_id: proposal.id) }.to raise_error(Sequel::Error, 'history unavailable')
+      expect(proposal.refresh.status).to eq('approved')
+      expect(synapse.refresh.version).to eq(1)
+      expect(synapse.transform).to be_nil
+      expect(synapse.mutations_dataset.count).to eq(0)
+    end
+
+    it 'does not apply an already applied proposal again' do
+      proposal.update(status: 'approved')
+      expect(runner.apply_proposal(proposal_id: proposal.id)[:success]).to be(true)
+      expect(runner.apply_proposal(proposal_id: proposal.id)[:success]).to be(false)
+      expect(synapse.mutations_dataset.count).to eq(1)
+    end
+
     it 'applies an auto-accepted transform proposal through the mutate runner' do
       proposal.update(status: 'auto_accepted', output: '{"template":"new"}')
 
@@ -248,7 +268,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Challenge do
   end
 
   describe 'when challenge is disabled' do
-    let(:settings_default) { { 'enabled' => false } }
+    let(:settings_default) { { enabled: false } }
 
     it 'returns skip result' do
       result = runner.challenge_proposal(proposal_id: proposal.id)

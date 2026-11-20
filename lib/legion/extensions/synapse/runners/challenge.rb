@@ -2,14 +2,14 @@
 
 require 'legion/logging/helper'
 
-require_relative '../helpers/challenge'
-require_relative '../helpers/confidence'
-require_relative '../data/models/synapse'
-require_relative '../data/models/synapse_proposal'
-require_relative '../data/models/synapse_challenge'
-require_relative '../data/models/synapse_signal'
-require_relative 'blast_radius'
-require_relative 'mutate'
+require 'legion/extensions/synapse/helpers/challenge'
+require 'legion/extensions/synapse/helpers/confidence'
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_proposal'
+require 'legion/extensions/synapse/data/models/synapse_challenge'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+require 'legion/extensions/synapse/runners/blast_radius'
+require 'legion/extensions/synapse/runners/mutate'
 
 module Legion
   module Extensions
@@ -128,16 +128,19 @@ module Legion
             mutation = mutation_for_proposal(proposal)
             return { success: false, error: "unsupported proposal_type: #{proposal.proposal_type}" } unless mutation
 
-            result = Object.new.extend(Mutate).mutate(
-              synapse_id:    proposal.synapse_id,
-              mutation_type: mutation[:mutation_type],
-              changes:       mutation[:changes],
-              trigger:       'gaia'
-            )
-            return result unless result[:success]
+            proposal.db.transaction do
+              claimed = Data::Model::SynapseProposal.where(id: proposal.id, status: proposal.status)
+                                                    .update(status: 'applied', reviewed_at: Time.now)
+              next { success: false, error: 'proposal already claimed' } if claimed.zero?
 
-            proposal.update(status: 'applied', reviewed_at: Time.now)
-            result.merge(proposal_id: proposal.id, status: 'applied', decision: 'applied')
+              result = Object.new.extend(Mutate).mutate(
+                synapse_id: proposal.synapse_id, mutation_type: mutation[:mutation_type],
+                changes: mutation[:changes], trigger: 'gaia'
+              )
+              raise Sequel::Error, result[:error] unless result[:success]
+
+              result.merge(proposal_id: proposal.id, status: 'applied', decision: 'applied')
+            end
           end
 
           def run_challenge_cycle(transformer_client: nil, **)
@@ -251,6 +254,8 @@ module Legion
               challenger_confidence: llm_confidence
             )
           rescue StandardError => e
+            raise if e.is_a?(NoMethodError) || e.is_a?(ArgumentError) || e.is_a?(TypeError)
+
             handle_exception(e, level: :warn, operation: :challenge_llm, proposal_id: proposal.id)
             Data::Model::SynapseChallenge.create(
               proposal_id: proposal.id, challenger_type: 'llm',

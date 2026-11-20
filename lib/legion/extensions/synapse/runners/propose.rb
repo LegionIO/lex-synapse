@@ -1,17 +1,19 @@
 # frozen_string_literal: true
 
-require_relative '../helpers/confidence'
-require_relative '../helpers/proposals'
-require_relative '../data/models/synapse'
-require_relative '../data/models/synapse_signal'
-require_relative '../data/models/synapse_proposal'
+require 'legion/logging/helper'
+
+require 'legion/extensions/synapse/helpers/confidence'
+require 'legion/extensions/synapse/helpers/proposals'
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+require 'legion/extensions/synapse/data/models/synapse_proposal'
 
 module Legion
   module Extensions
     module Synapse
       module Runners
         module Propose
-          include Legion::Logging::Helper if defined?(Legion::Logging::Helper)
+          include Legion::Logging::Helper
 
           PAIN_CORRELATION_THRESHOLD = 3
 
@@ -214,7 +216,9 @@ module Legion
             )
             { output: result[:success] ? Legion::JSON.dump(result[:result]) : nil }
           rescue StandardError => e
-            log.error("Proposal LLM call failed: #{e.message}")
+            raise if e.is_a?(NoMethodError) || e.is_a?(ArgumentError) || e.is_a?(TypeError)
+
+            handle_exception(e, level: :warn, operation: :proposal_llm)
             { output: nil }
           end
 
@@ -236,7 +240,9 @@ module Legion
 
             discovery.function_schema(function_id)
           rescue StandardError => e
-            log.debug("lookup_target_schema failed for #{function_id}: #{e.message}")
+            raise if e.is_a?(NoMethodError) || e.is_a?(ArgumentError) || e.is_a?(TypeError)
+
+            handle_exception(e, level: :warn, operation: :lookup_target_schema, function_id: function_id)
             nil
           end
 
