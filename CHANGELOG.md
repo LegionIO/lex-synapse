@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.37] - 2026-11-22
+### Fixed
+- Publish stable synapse patterns through Apollo, distinguish candidates and asynchronous submissions from durable results, and retrieve versioned raw patterns before deduplicated seeding (fixes #30).
+
 ## [0.4.36] - 2026-11-22
 ### Fixed
 - Resolve target proposal schemas from persisted function identity and the runtime tool registry, falling back to recorded keyword signatures instead of the nonexistent Discovery API (fixes #19).

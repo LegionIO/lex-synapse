@@ -36,9 +36,18 @@ module Legion
 
         attr_reader :conditioner_client, :transformer_client
 
-        def initialize(conditioner_client: nil, transformer_client: nil)
+        def initialize(conditioner_client: nil, transformer_client: nil, apollo_client: nil, **)
+          @apollo_client = apollo_client
           @conditioner_client = conditioner_client
           @transformer_client = transformer_client
+        end
+
+        def promote(apollo_client: @apollo_client, **)
+          super
+        end
+
+        def retrieve_and_seed(apollo_client: @apollo_client, **)
+          super
         end
 
         def evaluate(synapse_id:, payload: {})

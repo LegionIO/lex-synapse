@@ -137,7 +137,13 @@ Aggregates stats: confidence, status, 24h signal count, success rate, last mutat
 
 ### GAIA, knowledge entries, and blast radius
 
-`gaia_summary(**)` returns aggregate health; `gaia_reflection(**)` adds recent mutation information. `promote(synapse_id: nil, **)` returns candidate knowledge entries without publishing them. `retrieve_and_seed(knowledge_entries:, **)` consumes supplied knowledge entries without querying Apollo. Live Apollo integration is tracked in [#30](https://github.com/LegionIO/lex-synapse/issues/30).
+`gaia_summary(**)` returns aggregate health; `gaia_reflection(**)` adds recent mutation information.
+
+`promote(synapse_id: nil, apollo_client: nil, publish: true, **)` publishes through the optional loaded `Legion::Apollo` client or an injected client implementing its `ingest`/`retrieve` API. Eligible synapses are active, have confidence at least 0.9, are at least 24 hours old, and have no mutations in the last 24 hours. `publish: false` previews `candidates`; candidates never count as published. `promoted` and `count` require a persisted entry ID or Apollo's persisted-duplicate result. Async responses appear only in `submitted`; they do not establish durable storage. Failures appear in `errors`, and unavailable Apollo returns an explicit error. Repeated identical content uses Apollo's content-hash deduplication; a changed snapshot is a new pattern.
+
+`retrieve_and_seed(knowledge_entries: nil, apollo_client: nil, query: 'synapse routing patterns', limit: 100, **)` retrieves through Apollo before seeding. Supplying `knowledge_entries:` retains offline import support. Pending/failed queries create no synapses. Candidates require Apollo confidence of at least 0.7. New patterns carry the versioned `legion.synapse_pattern` marker inside preserved raw content, so Apollo's generic procedure/fact classification and summaries do not discard pattern identity. Unknown versions and invalid endpoint IDs are rejected; existing source/target pairs are skipped. Shared patterns require the same shared function catalog.
+
+Standalone clients can receive `apollo_client:` at construction. Synapse always requests global scope; Apollo installation, startup, authorization, and durable backend availability remain operator responsibilities.
 
 `compute(**)` recomputes blast-radius tiers from the active routing graph. `blast_tier(synapse_id:)` returns a stored tier. The private `analyze_routing` proposal stub is not a blast-radius API.
 

@@ -4,6 +4,12 @@ require 'spec_helper'
 require_relative '../../../../../lib/legion/extensions/synapse/runners/promote'
 
 RSpec.describe Legion::Extensions::Synapse::Runners::Promote do
+  let(:apollo) { double('Apollo', ingest: { success: true, entry_id: 7 }) }
+
+  before do
+    allow(promoter).to receive(:knowledge_provider).and_return(apollo)
+  end
+
   subject(:promoter) { Object.new.extend(described_class) }
 
   def make_synapse(confidence: 0.95, status: 'active', origin: 'explicit')
@@ -15,6 +21,7 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Promote do
       baseline_throughput: 1.0,
       origin:              origin,
       status:              status,
+      created_at:          Time.now - (25 * 3600),
       version:             1
     )
   end

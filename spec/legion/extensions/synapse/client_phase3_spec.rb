@@ -122,9 +122,11 @@ RSpec.describe Legion::Extensions::Synapse::Client do
         baseline_throughput: 0.0,
         origin:              'explicit',
         status:              'active',
+        created_at:          Time.now - (25 * 3600),
         version:             1
       )
-      result = client.promote
+      apollo = double('Apollo', ingest: { success: true, entry_id: 1 })
+      result = client.promote(apollo_client: apollo)
       expect(result[:count]).to eq(1)
     end
   end
