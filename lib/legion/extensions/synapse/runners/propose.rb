@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'legion/logging/helper'
+require 'legion/extensions/synapse/helpers/target_schema'
 
 require 'legion/extensions/synapse/helpers/confidence'
 require 'legion/extensions/synapse/helpers/proposals'
@@ -235,13 +236,8 @@ module Legion
           end
 
           def discovery_schema(function_id)
-            discovery = defined?(Legion::Extensions::Discovery) && Legion::Extensions::Discovery
-            return unless discovery.respond_to?(:function_schema)
-
-            discovery.function_schema(function_id)
-          rescue StandardError => e
-            raise if e.is_a?(NoMethodError) || e.is_a?(ArgumentError) || e.is_a?(TypeError)
-
+            Legion::Extensions::Synapse::Helpers::TargetSchema.resolve(function_id: function_id, db: Sequel::Model.db)
+          rescue Sequel::DatabaseError, Legion::JSON::ParseError => e
             handle_exception(e, level: :warn, operation: :lookup_target_schema, function_id: function_id)
             nil
           end

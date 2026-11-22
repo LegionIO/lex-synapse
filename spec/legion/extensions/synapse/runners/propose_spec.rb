@@ -298,18 +298,54 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Propose do
   end
 
   describe '#lookup_target_schema' do
-    it 'returns a discovered target schema when discovery data is available' do
-      discovery = Module.new do
-        def self.function_schema(function_id)
-          { payload: { name: 'String' }, function_id: function_id }
-        end
+    before do
+      DB.create_table(:extensions) do
+        primary_key :id
+        String :name
       end
-      stub_const('Legion::Extensions::Discovery', discovery)
-      synapse.update(target_function_id: 'lex-target.process')
+      DB.create_table(:runners) do
+        primary_key :id
+        Integer :extension_id
+        String :name
+      end
+      DB.create_table(:functions) do
+        primary_key :id
+        Integer :runner_id
+        String :name
+        String :args
+      end
+      extension_id = DB[:extensions].insert(name: 'lex-example')
+      runner_id = DB[:runners].insert(extension_id: extension_id, name: 'target')
+      target_id = DB[:functions].insert(runner_id: runner_id, name: 'consume', args: '[ ["keyreq", "value"], ["key", "label"] ]')
+      synapse.update(target_function_id: target_id)
+    end
 
-      schema = proposer.send(:lookup_target_schema, synapse)
+    after do
+      Legion::Settings::Extensions.unregister_tool('legion-example-target-consume')
+      DB.drop_table(:functions, :runners, :extensions)
+    end
 
-      expect(schema).to eq({ payload: { name: 'String' }, function_id: 'lex-target.process' })
+    it 'uses the actual numeric function ID to resolve the registered input schema' do
+      schema = { type: 'object', properties: { value: { type: 'integer' } }, required: ['value'] }
+      Legion::Settings::Extensions.register_tool('legion-example-target-consume',
+                                                 extension: 'lex-example', runner: 'target', input_schema: schema)
+      expect(proposer.send(:lookup_target_schema, synapse)).to eq(schema)
+      proposer.propose_reactive(synapse: synapse, payload: {}, signal_id: signal.id,
+                                attention_result: { passed: true }, transform_result: { success: true },
+                                transformer_client: transformer_client)
+      inputs = Legion::JSON.load(synapse.proposals_dataset.first.inputs)
+      expect(inputs[:target_schema]).to eq(schema)
+    end
+
+    it 'uses persisted keyword signatures when no rich schema is registered' do
+      expect(proposer.send(:lookup_target_schema, synapse)).to eq(
+        type: 'object', properties: { value: {}, label: {} }, required: ['value']
+      )
+    end
+
+    it 'returns an empty schema for an unknown persisted target' do
+      synapse.update(target_function_id: 999_999)
+      expect(proposer.send(:lookup_target_schema, synapse)).to eq({})
     end
   end
 end

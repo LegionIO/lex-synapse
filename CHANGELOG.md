@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.36] - 2026-11-22
+### Fixed
+- Resolve target proposal schemas from persisted function identity and the runtime tool registry, falling back to recorded keyword signatures instead of the nonexistent Discovery API (fixes #19).
+
 ## [0.4.35] - 2026-11-22
 ### Fixed
 - Reject ambiguous legacy mutation versions and allow exact rollback by immutable mutation ID; verify monotonic history through repeated rollback branches (fixes #22).
