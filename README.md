@@ -105,12 +105,12 @@ an AMQP producer publishing `synapse.evaluate` or `task.failed`.
 ### Pain
 `handle_pain(synapse_id:, task_id: nil, signal_id: nil, **)`
 
-Downstream failure handler. Records failed signal, adjusts confidence, calls `revert` on 3+ consecutive failures, may dampen synapse.
+Downstream failure handler. Task notifications must identify a correlated evaluation through `signal_id` or a unique `task_id`. Redelivery is neutral; uncorrelated task notifications return an error. Calls without either ID record a manual failure. Pending evaluations do not interrupt the completed-outcome failure streak. The outcome and confidence penalty commit together; three completed failures trigger reversion.
 
 ### Revert
-`revert(synapse_id:, to_version: nil, trigger: 'pain')`
+`revert(synapse_id:, to_version: nil, mutation_id: nil, trigger: 'pain', **)`
 
-Rolls back to a previous mutation version, restoring `before_state`. Records the revert as a new mutation entry.
+Restores a mutation’s `before_state`. `to_version` identifies the mutation being undone, rather than a target live-state version; omit it to undo the current live version. New history sequence numbers always exceed every prior history version, even after rollback lowers the live version. Legacy duplicate versions return an ambiguity error without changing state; use the immutable `mutation_id` to select exactly one historical row. Specify only one selector. Reversion appends a history entry and preserves existing identifiers.
 
 ### Crystallize
 `crystallize(signal_pairs: [], threshold: 20)`
@@ -137,7 +137,13 @@ Aggregates stats: confidence, status, 24h signal count, success rate, last mutat
 
 ### GAIA, knowledge entries, and blast radius
 
-`gaia_summary(**)` returns aggregate health; `gaia_reflection(**)` adds recent mutation information. `promote(synapse_id: nil, **)` returns candidate knowledge entries without publishing them. `retrieve_and_seed(knowledge_entries:, **)` consumes supplied knowledge entries without querying Apollo. Live Apollo integration is tracked in [#30](https://github.com/LegionIO/lex-synapse/issues/30).
+`gaia_summary(**)` returns aggregate health; `gaia_reflection(**)` adds recent mutation information.
+
+`promote(synapse_id: nil, apollo_client: nil, publish: true, **)` publishes through the optional loaded `Legion::Apollo` client or an injected client implementing its `ingest`/`retrieve` API. Eligible synapses are active, have confidence at least 0.9, are at least 24 hours old, and have no mutations in the last 24 hours. `publish: false` previews `candidates`; candidates never count as published. `promoted` and `count` require a persisted entry ID or Apollo's persisted-duplicate result. Async responses appear only in `submitted`; they do not establish durable storage. Failures appear in `errors`, and unavailable Apollo returns an explicit error. Repeated identical content uses Apollo's content-hash deduplication; a changed snapshot is a new pattern.
+
+`retrieve_and_seed(knowledge_entries: nil, apollo_client: nil, query: 'synapse routing patterns', limit: 100, **)` retrieves through Apollo before seeding. Supplying `knowledge_entries:` retains offline import support. Pending/failed queries create no synapses. Candidates require Apollo confidence of at least 0.7. New patterns carry the versioned `legion.synapse_pattern` marker inside preserved raw content, so Apollo's generic procedure/fact classification and summaries do not discard pattern identity. Unknown versions and invalid endpoint IDs are rejected; existing source/target pairs are skipped. Shared patterns require the same shared function catalog.
+
+Standalone clients can receive `apollo_client:` at construction. Synapse always requests global scope; Apollo installation, startup, authorization, and durable backend availability remain operator responsibilities.
 
 `compute(**)` recomputes blast-radius tiers from the active routing graph. `blast_tier(synapse_id:)` returns a stored tier. The private `analyze_routing` proposal stub is not a blast-radius API.
 
@@ -173,7 +179,7 @@ Five tables: `synapses` (core routing + confidence + status + blast_radius), `sy
 
 `report(synapse_id:)` measures the last 24 hours by signal creation time. `success_rate` is successful downstream outcomes divided by completed outcomes (`success` plus `failed`), and is `nil` when none are complete. `completed_outcomes_24h`, `successful_outcomes_24h`, and `failed_outcomes_24h` expose that denominator. `unresolved_signals_24h` includes pending tasks and evaluations that never dispatch; these do not count as completed failures. `evaluation_successes_24h` counts successful evaluation/pass-through records and is not proof of downstream completion or transformation execution.
 
-`Integration.attach_task` associates an evaluation signal with its downstream task and target runner/function. `Integration.record_outcome` and the installed host task event listeners finalize that same signal once; duplicate or conflicting completion notifications do not create another attempt. Live task-chain attachment depends on the lex-tasker companion tracked in [#18](https://github.com/LegionIO/lex-synapse/issues/18).
+`Integration.attach_task` associates an evaluation signal with its downstream task and target runner/function. `Integration.record_outcome` and the installed host task event listeners finalize that same signal once; duplicate or conflicting completion notifications do not create another attempt. Live task-chain attachment requires the dispatcher caller in [lex-tasker PR #10](https://github.com/LegionIO/lex-tasker/pull/10), tracked in [#18](https://github.com/LegionIO/lex-synapse/issues/18). Attachment is idempotent for the same task and target; missing signals and attempts to reassign a signal raise before publication so the dispatcher can retry safely. Synapse alone cannot intercept tasker publication.
 
 ### Required proposal review
 
@@ -192,3 +198,5 @@ MIT
 Configure `extensions.synapse.proposals` and `extensions.synapse.challenge` using symbol keys through `Legion::Settings` (JSON configuration keys are normalized by the loader). Defaults are exposed by `Legion::Extensions::Synapse.default_settings`. Standalone clients use the same settings and defaults. Migrate the former top-level `lex-synapse` section to `extensions.synapse`; that legacy path is no longer read.
 
 Scheduled crystallization samples the latest 1000 completed child tasks from the shared `tasks` table and groups their parent/child function IDs. At least 20 sampled edges are required for an observing emergent synapse. Failed or pending children do not count. Existing function pairs are skipped on later cycles. Standalone callers may still supply `signal_pairs:` explicitly; an empty array disables collection for that call.
+
+Transform proposals resolve numeric target function IDs through the shared function/runner/extension catalog to registered tool input schemas. If no rich schema is registered, recorded keyword signatures supply property names and required arguments without inventing types. Standalone databases without the host catalog use an empty target schema.

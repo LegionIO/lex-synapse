@@ -53,6 +53,28 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Revert do
         synapse.reload
       end
 
+      it 'rejects duplicate legacy versions instead of selecting an arbitrary snapshot' do
+        original = synapse.mutations_dataset.first
+        duplicate = Legion::Extensions::Synapse::Data::Model::SynapseMutation.create(
+          original.values.except(:id).merge(before_state: Legion::JSON.dump(Legion::JSON.load(original.before_state).merge(confidence: 0.2)))
+        )
+        before = synapse.refresh.values
+        expect(reverter.revert(synapse_id: synapse.id, to_version: 2)).to include(success: false, error: 'ambiguous mutation version; provide mutation_id')
+        expect(synapse.refresh.values).to eq(before)
+        result = reverter.revert(synapse_id: synapse.id, mutation_id: duplicate.id)
+        expect(result[:success]).to be(true)
+        expect(synapse.refresh.confidence).to eq(0.2)
+        expect(synapse.mutations_dataset.count).to eq(3)
+      end
+
+      it 'keeps identifiers increasing through repeated branches' do
+        3.times do
+          expect(reverter.revert(synapse_id: synapse.id)[:success]).to be(true)
+          mutator.mutate(synapse_id: synapse.id, mutation_type: 'confidence_changed', changes: { confidence: 0.6 }, trigger: 'manual')
+        end
+        expect(synapse.mutations_dataset.order(:id).select_map(:version)).to eq((2..8).to_a)
+      end
+
       it 'allows mutation and reversion again after history has branched' do
         reverter.revert(synapse_id: synapse.id)
         synapse.refresh.update(confidence: 0.75)

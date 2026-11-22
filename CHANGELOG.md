@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.40] - 2026-11-22
+### Fixed
+- Fingerprint shared pattern bodies so Apollo content normalization cannot collapse case-sensitive template changes into an older pattern (fixes #30).
+
+## [0.4.39] - 2026-11-22
+### Fixed
+- Validate task/signal attachment before dispatch, reject missing or reassigned correlations, and preserve idempotent retries (references #18; tasker dispatcher integration remains required).
+
+## [0.4.38] - 2026-11-22
+### Fixed
+- Resolve attached task identity for signal-only pain notifications and distinguish unknown or mismatched correlations from duplicate outcomes (fixes #21).
+
+## [0.4.37] - 2026-11-22
+### Fixed
+- Publish stable synapse patterns through Apollo, distinguish candidates and asynchronous submissions from durable results, and retrieve versioned raw patterns before deduplicated seeding (fixes #30).
+
+## [0.4.36] - 2026-11-22
+### Fixed
+- Resolve target proposal schemas from persisted function identity and the runtime tool registry, falling back to recorded keyword signatures instead of the nonexistent Discovery API (fixes #19).
+
+## [0.4.35] - 2026-11-22
+### Fixed
+- Reject ambiguous legacy mutation versions and allow exact rollback by immutable mutation ID; verify monotonic history through repeated rollback branches (fixes #22).
+
+## [0.4.34] - 2026-11-22
+### Fixed
+- Correlate task-only pain with its evaluation, prevent duplicate failure credit, and atomically persist outcome penalties; verify real interleaved evaluation/failure rollback (fixes #21).
+
 ## [0.4.33] - 2026-11-19
 ### Fixed
 - Feed periodic crystallization from the latest 1000 completed parent-child task edges, retaining threshold and duplicate checks (fixes #29).

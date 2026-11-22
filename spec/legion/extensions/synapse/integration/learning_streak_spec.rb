@@ -16,6 +16,20 @@ RSpec.describe 'Synapse repair eligibility and consecutive successes' do
     Legion::Extensions::Synapse::Data::Model::Synapse.dataset.delete
   end
 
+  it 'reverts persisted routing after three interleaved evaluations and correlated failures' do
+    client.mutate(synapse_id: synapse.id, mutation_type: 'route_changed', changes: { routing_strategy: 'broadcast' }, trigger: 'manual')
+    3.times do |task_id|
+      evaluation = client.evaluate(synapse_id: synapse.id)
+      synapse.signals_dataset.where(id: evaluation[:signal_id]).update(task_id: task_id)
+      result = client.handle_pain(synapse_id: synapse.id, task_id: task_id)
+      expect(result[:consecutive_failures]).to eq(task_id + 1)
+      expect(result[:reverted]).to be(true) if task_id == 2
+    end
+    expect(synapse.refresh.routing_strategy).to eq('direct')
+    expect(synapse.version).to eq(1)
+    expect(synapse.signals_dataset.count).to eq(3)
+  end
+
   it 'offers repair when validation lowers an eligible synapse below autonomy' do
     synapse.update(confidence: 0.8, transform: '{"template":"bad"}', consecutive_successes: 12)
     allow(transformer).to receive(:transform).with(hash_including(engine: nil)).and_return(success: false, errors: ['invalid'])

@@ -27,6 +27,24 @@ RSpec.describe Legion::Extensions::Synapse::Integration do
     expect(synapse.signals_dataset.first.task_id).to eq(456)
   end
 
+  it 'makes task attachment idempotent and rejects reassignment before publication' do
+    evaluation = client.evaluate(synapse_id: synapse.id)
+    2.times do
+      expect(described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 456,
+                                         runner_class: 'Example::Target', function: 'consume')).to include(success: true)
+    end
+    expect do
+      described_class.attach_task(signal_id: evaluation[:signal_id], task_id: 789, runner_class: 'Example::Other', function: 'consume')
+    end.to raise_error(Sequel::Error, /already correlated/)
+    expect(synapse.signals_dataset.first.task_id).to eq(456)
+  end
+
+  it 'raises for missing evaluation signals rather than permitting uncorrelated publication' do
+    expect do
+      described_class.attach_task(signal_id: 999_999, task_id: 456, runner_class: 'Example::Target', function: 'consume')
+    end.to raise_error(Sequel::Error, /signal is missing/)
+  end
+
   it 'blocks dampened wrapped relationships' do
     synapse.update(status: 'dampened')
     expect(described_class.evaluate_relationship(relationship_id: 123, payload: {})).to include(wrapped: true, allowed: false)
