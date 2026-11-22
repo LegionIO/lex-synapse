@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require_relative '../helpers/confidence'
-require_relative '../data/models/synapse'
-require_relative '../data/models/synapse_signal'
-require_relative 'revert'
+require 'legion/extensions/synapse/helpers/confidence'
+require 'legion/extensions/synapse/data/models/synapse'
+require 'legion/extensions/synapse/data/models/synapse_signal'
+require 'legion/extensions/synapse/runners/revert'
 
 module Legion
   module Extensions
@@ -20,21 +20,16 @@ module Legion
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 
-            # A task completion updates its original evaluation; repeated events are neutral.
-            if signal_id
-              changed = Legion::Extensions::Synapse::Data::Model::SynapseSignal
-                        .where(id: signal_id, synapse_id: synapse_id, task_id: task_id, downstream_outcome: nil)
-                        .update(downstream_outcome: 'failed', success_credit_pending: false)
-              return { success: true, duplicate: true } if changed.zero?
-            else
-              Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
-                synapse_id: synapse.id, task_id: task_id, passed_attention: true,
-                transform_success: true, downstream_outcome: 'failed'
-              )
+            if task_id && !signal_id
+              signals = synapse.signals_dataset.where(task_id: task_id).limit(2).all
+              return { success: false, error: 'task requires one correlated evaluation signal' } unless signals.one?
+
+              signal_id = signals.first.id
             end
 
-            # Adjust confidence
-            new_confidence = Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :failure)
+            # Claim the outcome and its penalty together; revert runs after this transaction.
+            new_confidence = record_failure(synapse: synapse, task_id: task_id, signal_id: signal_id)
+            return { success: true, duplicate: true } unless new_confidence
 
             # Check consecutive failures
             consecutive = count_consecutive_failures(synapse)
@@ -67,6 +62,22 @@ module Legion
           end
 
           private
+
+          def record_failure(synapse:, task_id:, signal_id:)
+            synapse.db.transaction do
+              if signal_id
+                changed = Legion::Extensions::Synapse::Data::Model::SynapseSignal
+                          .where(id: signal_id, synapse_id: synapse.id, task_id: task_id, downstream_outcome: nil)
+                          .update(downstream_outcome: 'failed', success_credit_pending: false)
+                next if changed.zero?
+              else
+                Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(
+                  synapse_id: synapse.id, passed_attention: true, transform_success: true, downstream_outcome: 'failed'
+                )
+              end
+              Legion::Extensions::Synapse::Helpers::Confidence.adjust_persisted(synapse: synapse, event: :failure)
+            end
+          end
 
           def count_consecutive_failures(synapse)
             recent = synapse.signals_dataset

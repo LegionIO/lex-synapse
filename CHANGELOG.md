@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.34] - 2026-11-22
+### Fixed
+- Correlate task-only pain with its evaluation, prevent duplicate failure credit, and atomically persist outcome penalties; verify real interleaved evaluation/failure rollback (fixes #21).
+
 ## [0.4.33] - 2026-11-19
 ### Fixed
 - Feed periodic crystallization from the latest 1000 completed parent-child task edges, retaining threshold and duplicate checks (fixes #29).

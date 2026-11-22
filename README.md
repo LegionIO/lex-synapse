@@ -105,7 +105,7 @@ an AMQP producer publishing `synapse.evaluate` or `task.failed`.
 ### Pain
 `handle_pain(synapse_id:, task_id: nil, signal_id: nil, **)`
 
-Downstream failure handler. Records failed signal, adjusts confidence, calls `revert` on 3+ consecutive failures, may dampen synapse.
+Downstream failure handler. Task notifications must identify a correlated evaluation through `signal_id` or a unique `task_id`. Redelivery is neutral; uncorrelated task notifications return an error. Calls without either ID record a manual failure. Pending evaluations do not interrupt the completed-outcome failure streak. The outcome and confidence penalty commit together; three completed failures trigger reversion.
 
 ### Revert
 `revert(synapse_id:, to_version: nil, trigger: 'pain')`
