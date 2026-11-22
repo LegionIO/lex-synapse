@@ -31,9 +31,17 @@ module Legion
           def attach_task(signal_id:, task_id:, runner_class:, function:, **)
             return unless signal_id
 
-            Legion::Extensions::Synapse::Data::Model::SynapseSignal.where(id: signal_id).update(
-              task_id: task_id, target_runner_class: runner_class.to_s, target_function: function.to_s
-            )
+            raise ArgumentError, 'task_id is required' if task_id.nil?
+            raise ArgumentError, 'target runner and function are required' if runner_class.to_s.empty? || function.to_s.empty?
+
+            Legion::Extensions::Synapse::Data::Model.define_synapse_signal_model
+            identity = { task_id: task_id, target_runner_class: runner_class.to_s, target_function: function.to_s }
+            updated = Legion::Extensions::Synapse::Data::Model::SynapseSignal.where(id: signal_id)
+                                                                             .where(Sequel.|({ task_id: nil, downstream_outcome: nil },
+                                                                                             identity)).update(identity)
+            raise Sequel::Error, 'evaluation signal is missing or already correlated to another task' if updated.zero?
+
+            { success: true, signal_id: signal_id, task_id: task_id }
           end
 
           def record_outcome(task_id:, outcome:, runner_class:, function:, **)

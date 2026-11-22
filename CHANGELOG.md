@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.39] - 2026-11-22
+### Fixed
+- Validate task/signal attachment before dispatch, reject missing or reassigned correlations, and preserve idempotent retries (references #18; tasker dispatcher integration remains required).
+
 ## [0.4.38] - 2026-11-22
 ### Fixed
 - Resolve attached task identity for signal-only pain notifications and distinguish unknown or mismatched correlations from duplicate outcomes (fixes #21).
