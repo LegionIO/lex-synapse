@@ -108,9 +108,9 @@ an AMQP producer publishing `synapse.evaluate` or `task.failed`.
 Downstream failure handler. Task notifications must identify a correlated evaluation through `signal_id` or a unique `task_id`. Redelivery is neutral; uncorrelated task notifications return an error. Calls without either ID record a manual failure. Pending evaluations do not interrupt the completed-outcome failure streak. The outcome and confidence penalty commit together; three completed failures trigger reversion.
 
 ### Revert
-`revert(synapse_id:, to_version: nil, trigger: 'pain')`
+`revert(synapse_id:, to_version: nil, mutation_id: nil, trigger: 'pain', **)`
 
-Rolls back to a previous mutation version, restoring `before_state`. Records the revert as a new mutation entry.
+Restores a mutation’s `before_state`. `to_version` identifies the mutation being undone, rather than a target live-state version; omit it to undo the current live version. New history sequence numbers always exceed every prior history version, even after rollback lowers the live version. Legacy duplicate versions return an ambiguity error without changing state; use the immutable `mutation_id` to select exactly one historical row. Specify only one selector. Reversion appends a history entry and preserves existing identifiers.
 
 ### Crystallize
 `crystallize(signal_pairs: [], threshold: 20)`

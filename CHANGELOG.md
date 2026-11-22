@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.35] - 2026-11-22
+### Fixed
+- Reject ambiguous legacy mutation versions and allow exact rollback by immutable mutation ID; verify monotonic history through repeated rollback branches (fixes #22).
+
 ## [0.4.34] - 2026-11-22
 ### Fixed
 - Correlate task-only pain with its evaluation, prevent duplicate failure credit, and atomically persist outcome penalties; verify real interleaved evaluation/failure rollback (fixes #21).
