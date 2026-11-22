@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.40] - 2026-11-22
+### Fixed
+- Fingerprint shared pattern bodies so Apollo content normalization cannot collapse case-sensitive template changes into an older pattern (fixes #30).
+
 ## [0.4.39] - 2026-11-22
 ### Fixed
 - Validate task/signal attachment before dispatch, reject missing or reassigned correlations, and preserve idempotent retries (references #18; tasker dispatcher integration remains required).

@@ -38,6 +38,19 @@ RSpec.describe 'Apollo synapse pattern exchange' do
     expect(seeded).to have_attributes(target_function_id: 52, origin: 'seeded', confidence: 0.5)
   end
 
+  it 'keeps case-sensitive template changes distinct under Apollo content normalization' do
+    synapse.update(transform: '{"template":"ABC"}')
+    contents = []
+    allow(apollo).to receive(:ingest) do |**options|
+      contents << options[:content].downcase
+      { success: true, entry_id: 7 }
+    end
+    client.promote
+    synapse.update(transform: '{"template":"abc"}')
+    client.promote
+    expect(contents.uniq.size).to eq(2)
+  end
+
   it 'previews candidates without claiming publication or calling Apollo' do
     synapse
     expect(apollo).not_to receive(:ingest)

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'legion/extensions/synapse/data/models/synapse'
 require 'legion/extensions/synapse/helpers/knowledge'
 require 'legion/extensions/synapse/data/models/synapse_mutation'
@@ -66,20 +67,24 @@ module Legion
           end
 
           def build_knowledge_entry(synapse)
+            pattern = {
+              format:             Legion::Extensions::Synapse::Helpers::Knowledge::PATTERN_FORMAT,
+              schema_version:     1,
+              source_function_id: synapse.source_function_id,
+              target_function_id: synapse.target_function_id,
+              attention:          synapse.attention,
+              transform:          synapse.transform,
+              routing_strategy:   synapse.routing_strategy,
+              confidence:         synapse.confidence,
+              origin:             synapse.origin,
+              version:            synapse.version
+            }
+            # Apollo normalizes content case for deduplication. Keep case-sensitive
+            # template changes distinct through a stable lowercase digest in the body.
+            pattern[:fingerprint] = Digest::SHA256.hexdigest(Legion::JSON.dump(pattern))
             {
               content_type: 'synapse_pattern',
-              content:      Legion::JSON.dump({
-                                                format:             Legion::Extensions::Synapse::Helpers::Knowledge::PATTERN_FORMAT,
-                                                schema_version:     1,
-                                                source_function_id: synapse.source_function_id,
-                                                target_function_id: synapse.target_function_id,
-                                                attention:          synapse.attention,
-                                                transform:          synapse.transform,
-                                                routing_strategy:   synapse.routing_strategy,
-                                                confidence:         synapse.confidence,
-                                                origin:             synapse.origin,
-                                                version:            synapse.version
-                                              }),
+              content:      Legion::JSON.dump(pattern),
               tags:         ['synapse', "origin:#{synapse.origin}", "route:#{synapse.routing_strategy}"],
               source_agent: 'lex-synapse',
               synapse_id:   synapse.id
