@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.38] - 2026-11-22
+### Fixed
+- Resolve attached task identity for signal-only pain notifications and distinguish unknown or mismatched correlations from duplicate outcomes (fixes #21).
+
 ## [0.4.37] - 2026-11-22
 ### Fixed
 - Publish stable synapse patterns through Apollo, distinguish candidates and asynchronous submissions from durable results, and retrieve versioned raw patterns before deduplicated seeding (fixes #30).

@@ -55,6 +55,21 @@ RSpec.describe Legion::Extensions::Synapse::Runners::Pain do
       expect(signal.refresh.downstream_outcome).to eq('failed')
     end
 
+    it 'accepts a signal-only notification when its task was already attached' do
+      signal = Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id, task_id: 42)
+      expect(handler.handle_pain(synapse_id: synapse.id, signal_id: signal.id)).to include(success: true, consecutive_failures: 1)
+      expect(signal.refresh.downstream_outcome).to eq('failed')
+      expect(handler.handle_pain(synapse_id: synapse.id, signal_id: signal.id)).to include(duplicate: true)
+    end
+
+    it 'rejects mismatched and unknown signal IDs without reporting them as duplicates' do
+      signal = Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id, task_id: 42)
+      expect(handler.handle_pain(synapse_id: synapse.id, signal_id: signal.id, task_id: 99)).to include(success: false)
+      expect(handler.handle_pain(synapse_id: synapse.id, signal_id: 999_999)).to include(success: false)
+      expect(signal.refresh.downstream_outcome).to be_nil
+      expect(synapse.refresh.confidence).to eq(0.7)
+    end
+
     it 'rolls back the outcome claim when the confidence write fails' do
       signal = Legion::Extensions::Synapse::Data::Model::SynapseSignal.create(synapse_id: synapse.id, task_id: 42)
       allow(Legion::Extensions::Synapse::Helpers::Confidence).to receive(:adjust_persisted).and_raise(Sequel::DatabaseError, 'write failed')

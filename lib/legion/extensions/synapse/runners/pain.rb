@@ -20,12 +20,11 @@ module Legion
             synapse = Data::Model::Synapse[synapse_id]
             return { success: false, error: 'synapse not found' } unless synapse
 
-            if task_id && !signal_id
-              signals = synapse.signals_dataset.where(task_id: task_id).limit(2).all
-              return { success: false, error: 'task requires one correlated evaluation signal' } unless signals.one?
+            correlation = resolve_failure_signal(synapse: synapse, task_id: task_id, signal_id: signal_id)
+            return correlation if correlation[:error]
 
-              signal_id = signals.first.id
-            end
+            task_id = correlation[:task_id]
+            signal_id = correlation[:signal_id]
 
             # Claim the outcome and its penalty together; revert runs after this transaction.
             new_confidence = record_failure(synapse: synapse, task_id: task_id, signal_id: signal_id)
@@ -62,6 +61,19 @@ module Legion
           end
 
           private
+
+          def resolve_failure_signal(synapse:, task_id:, signal_id:)
+            return {} unless task_id || signal_id
+
+            dataset = synapse.signals_dataset
+            signals = (signal_id ? dataset.where(id: signal_id) : dataset.where(task_id: task_id)).limit(2).all
+            return { success: false, error: 'task requires one correlated evaluation signal' } unless signals.one?
+
+            signal = signals.first
+            return { success: false, error: 'signal belongs to a different task' } if task_id && signal.task_id != task_id
+
+            { task_id: signal.task_id, signal_id: signal.id }
+          end
 
           def record_failure(synapse:, task_id:, signal_id:)
             synapse.db.transaction do
